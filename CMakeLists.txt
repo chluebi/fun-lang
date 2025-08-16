@@ -20,4 +20,10 @@ message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 
 
 add_executable(interpreter src/interpreter.cpp)
+
+target_compile_options(interpreter PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
+    $<$<CXX_COMPILER_ID:MSVC>:/W4>
+)
+
 target_link_libraries(interpreter PRIVATE LLVM)
