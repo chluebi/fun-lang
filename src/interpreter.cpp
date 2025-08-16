@@ -4,11 +4,59 @@
 #include <vector>
 #include <unordered_map>
 #include <optional>
+#include <utility>
 
 // Forward declarations
+class Context;
 class AstExpr;
+class AstFunction;
+class AstPrototype;
 
-// Context
+class AstPrototype {
+    std::string Name;
+    std::vector<std::string> Args;
+public:
+    AstPrototype(const std::string &Name, std::vector<std::string> Args)
+        : Name(Name), Args(std::move(Args)) {}
+    const std::string &getName() const { return Name; }
+    const std::vector<std::string> &getArgs() const { return Args; }
+};
+
+class AstExpr {
+public:
+    virtual ~AstExpr() = default;
+    virtual std::unique_ptr<AstExpr> eval(const Context& context) const = 0;
+    virtual std::unique_ptr<AstExpr> clone() const = 0;
+};
+
+class AstExprConst : public AstExpr {
+    long Value;
+public:
+    AstExprConst(const long &Value) : Value(Value) {}
+    long getValue() const { return Value; }
+    std::unique_ptr<AstExpr> eval(const Context& context) const override {
+        return std::make_unique<AstExprConst>(Value);
+    }
+    std::unique_ptr<AstExpr> clone() const override {
+        return std::make_unique<AstExprConst>(Value);
+    }
+};
+
+enum class BinaryOpKind {
+    Add, Sub, Mul, Div,
+};
+
+class AstFunction {
+    std::unique_ptr<AstPrototype> Proto;
+    std::unique_ptr<AstExpr> Body;
+public:
+    AstFunction(std::unique_ptr<AstPrototype> Proto, std::unique_ptr<AstExpr> Body)
+        : Proto(std::move(Proto)), Body(std::move(Body)) {}
+
+    const AstPrototype* getPrototype() const { return Proto.get(); }
+    std::unique_ptr<AstExpr> eval(const Context& context) const;
+};
+
 class Context {
 public:
     std::optional<long> getValue(const std::string& name) const {
@@ -21,27 +69,21 @@ public:
     void setValue(const std::string& name, long value) {
         variables[name] = value;
     }
+    const AstFunction* getFunction(const std::string& name) const {
+        auto it = functions.find(name);
+        if (it != functions.end()) {
+            return it->second.get();
+        }
+        return nullptr;
+    }
+    void addFunction(std::unique_ptr<AstFunction> func) {
+        functions[func->getPrototype()->getName()] = std::move(func);
+    }
 private:
     std::unordered_map<std::string, long> variables;
+    std::unordered_map<std::string, std::unique_ptr<AstFunction>> functions;
 };
 
-// The base expression with virtual methods
-class AstExpr {
-public:
-    virtual ~AstExpr() = default;
-    virtual std::unique_ptr<AstExpr> eval(const Context& context) const = 0;
-};
-
-// Expression Types
-class AstExprConst : public AstExpr {
-    long Value;
-public:
-    AstExprConst(const long &Value) : Value(Value) {}
-    long getValue() const { return Value; }
-    std::unique_ptr<AstExpr> eval(const Context& context) const override {
-        return std::make_unique<AstExprConst>(Value);
-    }
-};
 
 class AstExprVariable : public AstExpr {
     std::string Name;
@@ -55,28 +97,70 @@ public:
         }
         return std::make_unique<AstExprVariable>(Name);
     }
+    std::unique_ptr<AstExpr> clone() const override {
+        return std::make_unique<AstExprVariable>(Name);
+    }
 };
 
-enum class BinaryOpKind {
-    Add,
-    Sub,
-    Mul,
-    Div,
-};
-
-class AstExprBinaryBase : public AstExpr {
+class AstExprCall : public AstExpr {
+    std::string Callee;
+    std::vector<std::unique_ptr<AstExpr>> Args;
 public:
-    virtual BinaryOpKind getOpKind() const = 0;
+    AstExprCall(const std::string &Callee,
+                std::vector<std::unique_ptr<AstExpr>> Args)
+        : Callee(Callee), Args(std::move(Args)) {}
+    
+    std::unique_ptr<AstExpr> eval(const Context& context) const override {
+        const AstFunction* calleeFunc = context.getFunction(Callee);
+        
+        std::vector<std::unique_ptr<AstExpr>> evaluatedArgs;
+        bool allArgsEvaluated = true;
+        for (const auto& arg : this->Args) {
+            auto evaluated = arg->eval(context);
+            if (dynamic_cast<AstExprConst*>(evaluated.get())) {
+                evaluatedArgs.push_back(std::move(evaluated));
+            } else {
+                allArgsEvaluated = false;
+                evaluatedArgs.push_back(std::move(evaluated));
+            }
+        }
+        
+        if (!calleeFunc || !allArgsEvaluated) {
+            return std::make_unique<AstExprCall>(Callee, std::move(evaluatedArgs));
+        }
+        
+        std::vector<long> evaluatedArgValues;
+        for(const auto& arg : evaluatedArgs) {
+             evaluatedArgValues.push_back(dynamic_cast<AstExprConst*>(arg.get())->getValue());
+        }
+
+        Context funcContext;
+        const auto& protoArgs = calleeFunc->getPrototype()->getArgs();
+        if (protoArgs.size() != evaluatedArgValues.size()) {
+            return nullptr;
+        }
+        for (size_t i = 0; i < protoArgs.size(); ++i) {
+            funcContext.setValue(protoArgs[i], evaluatedArgValues[i]);
+        }
+        return calleeFunc->eval(funcContext);
+    }
+    
+    std::unique_ptr<AstExpr> clone() const override {
+        std::vector<std::unique_ptr<AstExpr>> clonedArgs;
+        for (const auto& arg : Args) {
+            clonedArgs.push_back(arg->clone());
+        }
+        return std::make_unique<AstExprCall>(Callee, std::move(clonedArgs));
+    }
 };
 
 template <BinaryOpKind OpKind>
-class AstExprBinary : public AstExprBinaryBase {
+class AstExprBinary : public AstExpr {
     std::unique_ptr<AstExpr> LHS, RHS;
 public:
     AstExprBinary(std::unique_ptr<AstExpr> LHS, std::unique_ptr<AstExpr> RHS)
         : LHS(std::move(LHS)), RHS(std::move(RHS)) {}
-    BinaryOpKind getOpKind() const override { return OpKind; }
-
+    
     std::unique_ptr<AstExpr> eval(const Context& context) const override {
         auto evaluatedLHS = LHS->eval(context);
         auto evaluatedRHS = RHS->eval(context);
@@ -99,7 +183,6 @@ public:
                 if (rhsVal != 0) {
                     result = lhsVal / rhsVal;
                 } else {
-                    // Division by zero, return the original expression
                     return std::make_unique<AstExprBinary<OpKind>>(
                         std::move(evaluatedLHS),
                         std::move(evaluatedRHS)
@@ -114,69 +197,48 @@ public:
             std::move(evaluatedRHS)
         );
     }
-};
 
-class AstExprCall : public AstExpr {
-    std::string Callee;
-    std::vector<std::unique_ptr<AstExpr>> Args;
-public:
-    AstExprCall(const std::string &Callee,
-                std::vector<std::unique_ptr<AstExpr>> Args)
-        : Callee(Callee), Args(std::move(Args)) {}
-    
-    std::unique_ptr<AstExpr> eval(const Context& context) const override {
-        std::vector<std::unique_ptr<AstExpr>> evaluatedArgs;
-        for (const auto& arg : Args) {
-            evaluatedArgs.push_back(arg->eval(context));
-        }
-        return std::make_unique<AstExprCall>(Callee, std::move(evaluatedArgs));
+    std::unique_ptr<AstExpr> clone() const override {
+        return std::make_unique<AstExprBinary<OpKind>>(
+            LHS->clone(),
+            RHS->clone()
+        );
     }
 };
 
-class AstPrototype {
-    std::string Name;
-    std::vector<std::string> Args;
-public:
-    AstPrototype(const std::string &Name, std::vector<std::string> Args)
-        : Name(Name), Args(std::move(Args)) {}
-    const std::string &getName() const { return Name; }
-};
+std::unique_ptr<AstExpr> AstFunction::eval(const Context& context) const {
+    return Body->eval(context);
+}
 
-class AstFunction {
-    std::unique_ptr<AstPrototype> Proto;
-    std::unique_ptr<AstExpr> Body;
-public:
-    AstFunction(std::unique_ptr<AstPrototype> Proto,
-                std::unique_ptr<AstExpr> Body)
-        : Proto(std::move(Proto)), Body(std::move(Body)) {}
-
-    std::unique_ptr<AstExpr> eval(const Context& context) const {
-        return Body->eval(context);
-    }
-};
-
-int main(int argc, char *argv[]) {
-    auto expr = std::make_unique<AstExprBinary<BinaryOpKind::Mul>>(
-        std::make_unique<AstExprBinary<BinaryOpKind::Add>>(
-            std::make_unique<AstExprConst>(5),
-            std::make_unique<AstExprVariable>("y")
-        ),
-        std::make_unique<AstExprConst>(2)
+int main() {
+    auto addFuncBody = std::make_unique<AstExprBinary<BinaryOpKind::Add>>(
+        std::make_unique<AstExprVariable>("x"),
+        std::make_unique<AstExprVariable>("y")
     );
+    auto addFuncProto = std::make_unique<AstPrototype>("add", std::vector<std::string>{"x", "y"});
+    auto addFunc = std::make_unique<AstFunction>(std::move(addFuncProto), std::move(addFuncBody));
 
-    AstFunction func(
-        std::make_unique<AstPrototype>("MyFunction", std::vector<std::string>{"y"}),
-        std::move(expr)
+    std::vector<std::unique_ptr<AstExpr>> args = std::vector<std::unique_ptr<AstExpr>>{};
+    args.push_back(std::make_unique<AstExprConst>(5));
+    args.push_back(std::make_unique<AstExprConst>(3));
+
+    auto callExpr = std::make_unique<AstExprCall>("add", std::move(args));
+
+    auto mainFuncBody = std::make_unique<AstExprBinary<BinaryOpKind::Sub>>(
+        callExpr->clone(),
+        callExpr->clone()
     );
-    
-    Context context;
-    context.setValue("y", 3);
-    
-    auto evaluatedExpr = func.eval(context);
+    auto mainFuncProto = std::make_unique<AstPrototype>("main", std::vector<std::string>{});
+    AstFunction mainFunc(std::move(mainFuncProto), std::move(mainFuncBody));
+
+    Context globalContext;
+    globalContext.addFunction(std::move(addFunc));
+
+    auto evaluatedExpr = mainFunc.eval(globalContext);
     
     AstExprConst* resultConst = dynamic_cast<AstExprConst*>(evaluatedExpr.get());
     if (resultConst) {
-        std::cout << "Result: " << resultConst->getValue() << std::endl; // Should print 16
+        std::cout << "Result: " << resultConst->getValue() << std::endl;
     } else {
         std::cout << "Could not fully evaluate the expression." << std::endl;
     }
