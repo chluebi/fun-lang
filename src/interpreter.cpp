@@ -55,6 +55,15 @@ public:
 
     const AstPrototype* getPrototype() const { return Proto.get(); }
     std::unique_ptr<AstExpr> eval(const Context& context) const;
+    std::unique_ptr<AstFunction> clone() const {
+        return std::make_unique<AstFunction>(
+            std::make_unique<AstPrototype>(
+                Proto->getName(),
+                Proto->getArgs()
+            ),
+            Body->clone()
+        );
+    }
 };
 
 class Context {
@@ -78,6 +87,21 @@ public:
     }
     void addFunction(std::unique_ptr<AstFunction> func) {
         functions[func->getPrototype()->getName()] = std::move(func);
+    }
+    std::unique_ptr<Context> cloneFunctionContext() const {
+        auto funcContext = std::make_unique<Context>();
+        for (const auto & [ key, value ] : functions) {
+            funcContext->addFunction(std::unique_ptr<AstFunction>(value->clone()));
+        }
+        return funcContext;
+    }
+    std::unique_ptr<Context> clone() const {
+        auto newContext = std::make_unique<Context>();
+        for (const auto & [ key, value ] : functions) {
+            newContext->addFunction(std::unique_ptr<AstFunction>(value->clone()));
+        }
+        newContext->variables = this->variables;
+        return newContext;
     }
 private:
     std::unordered_map<std::string, long> variables;
@@ -134,15 +158,16 @@ public:
              evaluatedArgValues.push_back(dynamic_cast<AstExprConst*>(arg.get())->getValue());
         }
 
-        Context funcContext;
+        std::unique_ptr<Context> funcContext = context.cloneFunctionContext();
         const auto& protoArgs = calleeFunc->getPrototype()->getArgs();
         if (protoArgs.size() != evaluatedArgValues.size()) {
             return nullptr;
         }
         for (size_t i = 0; i < protoArgs.size(); ++i) {
-            funcContext.setValue(protoArgs[i], evaluatedArgValues[i]);
+            funcContext->setValue(protoArgs[i], evaluatedArgValues[i]);
         }
-        return calleeFunc->eval(funcContext);
+
+        return calleeFunc->eval(*funcContext);
     }
     
     std::unique_ptr<AstExpr> clone() const override {
@@ -151,6 +176,34 @@ public:
             clonedArgs.push_back(arg->clone());
         }
         return std::make_unique<AstExprCall>(Callee, std::move(clonedArgs));
+    }
+};
+
+class AstExprLetIn : public AstExpr {
+    std::string Variable;
+    std::unique_ptr<AstExpr> Expr;
+    std::unique_ptr<AstExpr> Body;
+public:
+    AstExprLetIn(const std::string &Variable,
+                std::unique_ptr<AstExpr> Expr,
+                std::unique_ptr<AstExpr> Body)
+        : Variable(Variable), Expr(std::move(Expr)), Body(std::move(Body)) {}
+    
+    std::unique_ptr<AstExpr> eval(const Context& context) const override {
+
+        std::unique_ptr<AstExpr> evaluatedExpr = Expr->eval(context);
+        if (!dynamic_cast<AstExprConst*>(evaluatedExpr.get())) {
+            return std::make_unique<AstExprLetIn>(Variable, evaluatedExpr->clone(), Body->clone());
+        }
+
+        std::unique_ptr<Context> newContext = context.clone();
+        newContext->setValue(Variable, dynamic_cast<AstExprConst*>(evaluatedExpr.get())->getValue());
+        
+        return Body->eval(*newContext);
+    }
+    
+    std::unique_ptr<AstExpr> clone() const override {
+        return std::make_unique<AstExprLetIn>(Variable, Expr->clone(), Body->clone());
     }
 };
 

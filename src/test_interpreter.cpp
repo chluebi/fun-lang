@@ -87,6 +87,31 @@ TEST_CASE(FunctionCall) {
     ASSERT_EQ(46, result); // add(12, 34)
 }
 
+TEST_CASE(LetIn) {
+    auto exprX = std::make_unique<AstExprBinary<BinaryOpKind::Add>>(
+        std::make_unique<AstExprConst>(5),
+        std::make_unique<AstExprConst>(10)
+    );
+    auto exprY = std::make_unique<AstExprBinary<BinaryOpKind::Sub>>(
+        std::make_unique<AstExprConst>(10),
+        std::make_unique<AstExprConst>(5)
+    );
+
+    std::vector<std::unique_ptr<AstExpr>> args;
+    args.push_back(std::make_unique<AstExprVariable>("x"));
+    args.push_back(std::make_unique<AstExprVariable>("y"));
+
+    auto body = std::make_unique<AstExprCall>("add", std::move(args));
+    auto expr = std::make_unique<AstExprLetIn>("x", std::move(exprX),
+        std::make_unique<AstExprLetIn>("y", std::move(exprY),
+                std::move(body)
+            )
+        );
+
+    long result = evaluateExpression(std::move(expr));
+    ASSERT_EQ(20, result); // let x := 5 + 10 in (let y := 10 - 5) in x + y
+}
+
 int main() {
     RUN_ALL_TESTS();
     return 0;
