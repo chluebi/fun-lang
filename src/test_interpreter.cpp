@@ -59,6 +59,52 @@ std::unique_ptr<InterpreterValue> evaluateExpression(std::unique_ptr<AstExpr> ex
     auto multiplyFuncProto = std::make_unique<AstPrototype>("multiply", std::vector<std::string>{"x", "y"});
     auto multiplyFunc = std::make_unique<AstFunction>(std::move(multiplyFuncProto), std::move(multiplyFuncBody));
     context.addFunction(std::move(multiplyFunc));
+
+
+    // Factorial function
+    auto factorialProto = std::make_unique<AstPrototype>("factorial", std::vector<std::string>{"n"});
+    
+    // Base case: n == 0
+    auto factMatchGuard1 = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>>(
+        std::make_unique<AstExprVariable>("n"),
+        std::make_unique<AstExprConstLong>(0L)
+    );
+    auto factMatchBody1 = std::make_unique<AstExprConstLong>(1L);
+    auto factMatchPath1 = std::make_unique<AstExprMatchPath>(std::move(factMatchGuard1), std::move(factMatchBody1));
+
+    // Recursive case: n > 0
+    auto factMatchGuard2 = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>>(
+        std::make_unique<AstExprVariable>("n"),
+        std::make_unique<AstExprConstLong>(0L)
+    );
+    
+    // Arguments for recursive call: n-1
+    auto factRecurseArg = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>>(
+        std::make_unique<AstExprVariable>("n"),
+        std::make_unique<AstExprConstLong>(1L)
+    );
+    
+    // Recursive call: factorial(n - 1)
+    std::vector<std::unique_ptr<AstExpr>> factCallArgs;
+    factCallArgs.push_back(std::move(factRecurseArg));
+    auto factRecurseCall = std::make_unique<AstExprCall>("factorial", std::move(factCallArgs));
+    
+    // Body: n * factorial(n - 1)
+    auto factMatchBody2 = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>>(
+        std::make_unique<AstExprVariable>("n"),
+        std::move(factRecurseCall)
+    );
+    
+    auto factMatchPath2 = std::make_unique<AstExprMatchPath>(std::move(factMatchGuard2), std::move(factMatchBody2));
+
+    std::vector<std::unique_ptr<AstExprMatchPath>> factPaths;
+    factPaths.push_back(std::move(factMatchPath1));
+    factPaths.push_back(std::move(factMatchPath2));
+    
+    auto factorialBody = std::make_unique<AstExprMatch>(std::move(factPaths));
+    auto factorialFunc = std::make_unique<AstFunction>(std::move(factorialProto), std::move(factorialBody));
+    context.addFunction(std::move(factorialFunc));
+
     
     return expr->eval(context);
 }
@@ -410,6 +456,144 @@ TEST_CASE(BooleanOr_TypeError) {
     std::unique_ptr<InterpreterValue> result = evaluateExpression(std::move(expr));
     ASSERT_EQ(nullptr, result.get());
 }
+
+TEST_CASE(Match_FirstPathTrue) {
+    std::vector<std::unique_ptr<AstExprMatchPath>> paths;
+    paths.push_back(std::make_unique<AstExprMatchPath>(
+        std::make_unique<AstExprConstBool>(true),
+        std::make_unique<AstExprConstLong>(10L)
+    ));
+    paths.push_back(std::make_unique<AstExprMatchPath>(
+        std::make_unique<AstExprConstBool>(false),
+        std::make_unique<AstExprConstLong>(20L)
+    ));
+    auto expr = std::make_unique<AstExprMatch>(std::move(paths));
+    long result = getLongResult(evaluateExpression(std::move(expr)));
+    ASSERT_EQ(10L, result);
+}
+
+TEST_CASE(Match_SecondPathTrue) {
+    std::vector<std::unique_ptr<AstExprMatchPath>> paths;
+    paths.push_back(std::make_unique<AstExprMatchPath>(
+        std::make_unique<AstExprConstBool>(false),
+        std::make_unique<AstExprConstLong>(10L)
+    ));
+    paths.push_back(std::make_unique<AstExprMatchPath>(
+        std::make_unique<AstExprConstBool>(true),
+        std::make_unique<AstExprConstLong>(20L)
+    ));
+    auto expr = std::make_unique<AstExprMatch>(std::move(paths));
+    long result = getLongResult(evaluateExpression(std::move(expr)));
+    ASSERT_EQ(20L, result);
+}
+
+TEST_CASE(Match_NoPathTrue) {
+    std::vector<std::unique_ptr<AstExprMatchPath>> paths;
+    paths.push_back(std::make_unique<AstExprMatchPath>(
+        std::make_unique<AstExprConstBool>(false),
+        std::make_unique<AstExprConstLong>(10L)
+    ));
+    paths.push_back(std::make_unique<AstExprMatchPath>(
+        std::make_unique<AstExprConstBool>(false),
+        std::make_unique<AstExprConstLong>(20L)
+    ));
+    auto expr = std::make_unique<AstExprMatch>(std::move(paths));
+    std::unique_ptr<InterpreterValue> result = evaluateExpression(std::move(expr));
+    ASSERT_EQ(nullptr, result.get());
+}
+
+TEST_CASE(Match_WithLetInAndCalls) {
+    // let x := 15L
+    auto letExpr = std::make_unique<AstExprConstLong>(15L);
+    
+    // x > 10L
+    auto guard1 = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>>(
+        std::make_unique<AstExprVariable>("x"),
+        std::make_unique<AstExprConstLong>(10L)
+    );
+    
+    // x + 5L
+    auto body1 = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>>(
+        std::make_unique<AstExprVariable>("x"),
+        std::make_unique<AstExprConstLong>(5L)
+    );
+    
+    auto path1 = std::make_unique<AstExprMatchPath>(std::move(guard1), std::move(body1));
+
+    // true
+    auto guard2 = std::make_unique<AstExprConstBool>(true);
+
+    // 0L
+    auto body2 = std::make_unique<AstExprConstLong>(0L);
+
+    auto path2 = std::make_unique<AstExprMatchPath>(std::move(guard2), std::move(body2));
+    
+    std::vector<std::unique_ptr<AstExprMatchPath>> paths;
+    paths.push_back(std::move(path1));
+    paths.push_back(std::move(path2));
+
+    auto matchExpr = std::make_unique<AstExprMatch>(std::move(paths));
+    
+    auto expr = std::make_unique<AstExprLetIn>("x", std::move(letExpr), std::move(matchExpr));
+    
+    long result = getLongResult(evaluateExpression(std::move(expr)));
+    ASSERT_EQ(20L, result);
+}
+
+TEST_CASE(Match_NestedExpressions) {
+    std::vector<std::unique_ptr<AstExprMatchPath>> paths;
+    
+    // Guard: (5L == 5L)
+    auto guard1 = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>>(
+        std::make_unique<AstExprConstLong>(5L),
+        std::make_unique<AstExprConstLong>(5L)
+    );
+    
+    // Body: (10L * 2L)
+    auto body1 = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>>(
+        std::make_unique<AstExprConstLong>(10L),
+        std::make_unique<AstExprConstLong>(2L)
+    );
+    
+    paths.push_back(std::make_unique<AstExprMatchPath>(std::move(guard1), std::move(body1)));
+
+    // Guard: true
+    auto guard2 = std::make_unique<AstExprConstBool>(true);
+    
+    // Body: 100L
+    auto body2 = std::make_unique<AstExprConstLong>(100L);
+    
+    paths.push_back(std::make_unique<AstExprMatchPath>(std::move(guard2), std::move(body2)));
+
+    auto expr = std::make_unique<AstExprMatch>(std::move(paths));
+    long result = getLongResult(evaluateExpression(std::move(expr)));
+    ASSERT_EQ(20L, result);
+}
+
+TEST_CASE(Match_GuardTypeError) {
+    std::vector<std::unique_ptr<AstExprMatchPath>> paths;
+    
+    // Guard: 10L (should be bool)
+    auto guard = std::make_unique<AstExprConstLong>(10L);
+    
+    // Body: 10L
+    auto body = std::make_unique<AstExprConstLong>(10L);
+    
+    paths.push_back(std::make_unique<AstExprMatchPath>(std::move(guard), std::move(body)));
+    
+    auto expr = std::make_unique<AstExprMatch>(std::move(paths));
+    std::unique_ptr<InterpreterValue> result = evaluateExpression(std::move(expr));
+    ASSERT_EQ(nullptr, result.get());
+}
+
+TEST_CASE(Factorial) {
+    std::vector<std::unique_ptr<AstExpr>> args;
+    args.push_back(std::make_unique<AstExprConstLong>(5L));
+    auto call_expr = std::make_unique<AstExprCall>("factorial", std::move(args));
+    long result = getLongResult(evaluateExpression(std::move(call_expr)));
+    ASSERT_EQ(120L, result);
+}
+
 
 
 int main() {

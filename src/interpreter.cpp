@@ -26,7 +26,7 @@ class InterpreterValueBool : public InterpreterValue {
     bool Value;
 public:
     InterpreterValueBool(const bool &Value) : Value(Value) {}
-    long getValue() const { return Value; }
+    bool getValue() const { return Value; }
     std::unique_ptr<InterpreterValue> clone() const override {
         return std::make_unique<InterpreterValueBool>(Value);
     }
@@ -402,3 +402,53 @@ public:
 std::unique_ptr<InterpreterValue> AstFunction::eval(const Context& context) const {
     return Body->eval(context);
 }
+
+
+class AstExprMatchPath {
+public:
+    std::unique_ptr<AstExpr> Guard;
+    std::unique_ptr<AstExpr> Body;
+
+    AstExprMatchPath(std::unique_ptr<AstExpr> guard, std::unique_ptr<AstExpr> body)
+        : Guard(std::move(guard)), Body(std::move(body)) {}
+
+    std::unique_ptr<AstExprMatchPath> clone() const {
+        return std::make_unique<AstExprMatchPath>(Guard->clone(), Body->clone());
+    }
+};
+
+
+class AstExprMatch : public AstExpr {
+    std::vector<std::unique_ptr<AstExprMatchPath>> Paths;
+public:
+    AstExprMatch(std::vector<std::unique_ptr<AstExprMatchPath>> Paths)
+        : Paths(std::move(Paths)) {}
+    
+    std::unique_ptr<InterpreterValue> eval(const Context& context) const override {
+
+        for (const auto& path : this->Paths) {
+            auto evaluated = path->Guard->eval(context);
+            if (!evaluated) {
+                return nullptr;
+            }
+            auto evaluatedBool = dynamic_cast<InterpreterValueBool*>(evaluated.get());
+            if (!evaluatedBool) {
+                return nullptr;
+            }
+
+            if (evaluatedBool->getValue()) {
+                return path->Body->eval(context);
+            }
+        }
+
+        return nullptr;
+    }
+    
+    std::unique_ptr<AstExpr> clone() const override {
+        std::vector<std::unique_ptr<AstExprMatchPath>> clonedPaths;
+        for (const auto& path : Paths) {
+            clonedPaths.push_back(path->clone());
+        }
+        return std::make_unique<AstExprMatch>(std::move(clonedPaths));
+    }
+};
