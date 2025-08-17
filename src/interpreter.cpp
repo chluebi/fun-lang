@@ -4,7 +4,7 @@
 #include <vector>
 #include <unordered_map>
 #include <optional>
-#include <utility>
+
 
 // Forward declarations
 class Context;
@@ -12,15 +12,6 @@ class AstExpr;
 class AstFunction;
 class AstPrototype;
 
-class AstPrototype {
-    std::string Name;
-    std::vector<std::string> Args;
-public:
-    AstPrototype(const std::string &Name, std::vector<std::string> Args)
-        : Name(Name), Args(std::move(Args)) {}
-    const std::string &getName() const { return Name; }
-    const std::vector<std::string> &getArgs() const { return Args; }
-};
 
 class AstExpr {
 public:
@@ -42,8 +33,14 @@ public:
     }
 };
 
-enum class BinaryOpKind {
-    Add, Sub, Mul, Div,
+class AstPrototype {
+    std::string Name;
+    std::vector<std::string> Args;
+public:
+    AstPrototype(const std::string &Name, std::vector<std::string> Args)
+        : Name(Name), Args(std::move(Args)) {}
+    const std::string &getName() const { return Name; }
+    const std::vector<std::string> &getArgs() const { return Args; }
 };
 
 class AstFunction {
@@ -205,6 +202,10 @@ public:
     std::unique_ptr<AstExpr> clone() const override {
         return std::make_unique<AstExprLetIn>(Variable, Expr->clone(), Body->clone());
     }
+};
+
+enum class BinaryOpKind {
+    Add, Sub, Mul, Div,
 };
 
 template <BinaryOpKind OpKind>
