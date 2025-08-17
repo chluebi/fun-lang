@@ -51,6 +51,7 @@ public:
 class AstExprConst : public AstExpr {
     virtual std::unique_ptr<InterpreterValue> getValue() const = 0;
     std::unique_ptr<InterpreterValue> eval(const Context& context) const override {
+        (void) context; // silence unused parameter
         return getValue();
     }
 };
@@ -59,7 +60,7 @@ class AstExprConstLong : public AstExprConst {
     long Value;
 public:
     AstExprConstLong(const long &Value) : Value(Value) {}
-    std::unique_ptr<InterpreterValue> getValue() const {
+    std::unique_ptr<InterpreterValue> getValue() const override {
         return std::make_unique<InterpreterValueLong>(Value);
     }
     std::unique_ptr<AstExpr> clone() const override {
@@ -71,7 +72,7 @@ class AstExprConstBool : public AstExprConst {
     bool Value;
 public:
     AstExprConstBool(const bool &Value) : Value(Value) {}
-    std::unique_ptr<InterpreterValue> getValue() const {
+    std::unique_ptr<InterpreterValue> getValue() const override {
         return std::make_unique<InterpreterValueBool>(Value);
     }
     std::unique_ptr<AstExpr> clone() const override {
@@ -243,15 +244,15 @@ public:
     }
 };
 
-enum class BinaryOpKind {
+enum class BinaryOpKindIntToInt {
     Add, Sub, Mul, Div,
 };
 
-template <BinaryOpKind OpKind>
-class AstExprBinary : public AstExpr {
+template <BinaryOpKindIntToInt OpKind>
+class AstExprBinaryIntToInt : public AstExpr {
     std::unique_ptr<AstExpr> LHS, RHS;
 public:
-    AstExprBinary(std::unique_ptr<AstExpr> LHS, std::unique_ptr<AstExpr> RHS)
+    AstExprBinaryIntToInt(std::unique_ptr<AstExpr> LHS, std::unique_ptr<AstExpr> RHS)
         : LHS(std::move(LHS)), RHS(std::move(RHS)) {}
     
     std::unique_ptr<InterpreterValue> eval(const Context& context) const override {
@@ -272,13 +273,13 @@ public:
         long rhsVal = rhsLong->getValue();
         long result;
 
-        if constexpr (OpKind == BinaryOpKind::Add) {
+        if constexpr (OpKind == BinaryOpKindIntToInt::Add) {
             result = lhsVal + rhsVal;
-        } else if constexpr (OpKind == BinaryOpKind::Sub) {
+        } else if constexpr (OpKind == BinaryOpKindIntToInt::Sub) {
             result = lhsVal - rhsVal;
-        } else if constexpr (OpKind == BinaryOpKind::Mul) {
+        } else if constexpr (OpKind == BinaryOpKindIntToInt::Mul) {
             result = lhsVal * rhsVal;
-        } else if constexpr (OpKind == BinaryOpKind::Div) {
+        } else if constexpr (OpKind == BinaryOpKindIntToInt::Div) {
             if (rhsVal == 0) {
                 return nullptr; // division by zero
             }
@@ -289,7 +290,109 @@ public:
     }
 
     std::unique_ptr<AstExpr> clone() const override {
-        return std::make_unique<AstExprBinary<OpKind>>(
+        return std::make_unique<AstExprBinaryIntToInt<OpKind>>(
+            LHS->clone(),
+            RHS->clone()
+        );
+    }
+};
+
+enum class BinaryOpKindIntToBool {
+    Eq, Neq, Leq, Lt, Geq, Gt
+};
+
+template <BinaryOpKindIntToBool OpKind>
+class AstExprBinaryIntToBool : public AstExpr {
+    std::unique_ptr<AstExpr> LHS, RHS;
+public:
+    AstExprBinaryIntToBool(std::unique_ptr<AstExpr> LHS, std::unique_ptr<AstExpr> RHS)
+        : LHS(std::move(LHS)), RHS(std::move(RHS)) {}
+    
+    std::unique_ptr<InterpreterValue> eval(const Context& context) const override {
+        auto valueLHS = LHS->eval(context);
+        auto valueRHS = RHS->eval(context);
+
+        if (!valueLHS || !valueRHS) {
+            return nullptr;
+        }
+
+        auto lhsLong = dynamic_cast<InterpreterValueLong*>(valueLHS.get());
+        auto rhsLong = dynamic_cast<InterpreterValueLong*>(valueRHS.get());
+        if (!lhsLong || !rhsLong) {
+            return nullptr; // type mismatch
+        }
+
+        long lhsVal = lhsLong->getValue();
+        long rhsVal = rhsLong->getValue();
+        
+        
+        bool result;
+
+        if constexpr (OpKind == BinaryOpKindIntToBool::Eq) {
+            result = lhsVal == rhsVal;
+        } else if constexpr (OpKind == BinaryOpKindIntToBool::Neq) {
+            result = lhsVal != rhsVal;
+        } else if constexpr (OpKind == BinaryOpKindIntToBool::Leq) {
+            result = lhsVal <= rhsVal;
+        } else if constexpr (OpKind == BinaryOpKindIntToBool::Lt) {
+            result = lhsVal < rhsVal;
+        } else if constexpr (OpKind == BinaryOpKindIntToBool::Geq) {
+            result = lhsVal >= rhsVal;
+        } else if constexpr (OpKind == BinaryOpKindIntToBool::Gt) {
+            result = lhsVal > rhsVal;
+        }
+
+        return std::make_unique<InterpreterValueBool>(result);
+    }
+
+    std::unique_ptr<AstExpr> clone() const override {
+        return std::make_unique<AstExprBinaryIntToBool<OpKind>>(
+            LHS->clone(),
+            RHS->clone()
+        );
+    }
+};
+
+enum class BinaryOpKindBoolToBool {
+    And, Or
+};
+
+template <BinaryOpKindBoolToBool OpKind>
+class AstExprBinaryBoolToBool : public AstExpr {
+    std::unique_ptr<AstExpr> LHS, RHS;
+public:
+    AstExprBinaryBoolToBool(std::unique_ptr<AstExpr> LHS, std::unique_ptr<AstExpr> RHS)
+        : LHS(std::move(LHS)), RHS(std::move(RHS)) {}
+
+    std::unique_ptr<InterpreterValue> eval(const Context& context) const override {
+        auto valueLHS = LHS->eval(context);
+        auto valueRHS = RHS->eval(context);
+
+        if (!valueLHS || !valueRHS) {
+            return nullptr;
+        }
+
+        auto lhsBool = dynamic_cast<InterpreterValueBool*>(valueLHS.get());
+        auto rhsBool = dynamic_cast<InterpreterValueBool*>(valueRHS.get());
+        if (!lhsBool || !rhsBool) {
+            return nullptr; // type mismatch
+        }
+
+        bool lhsVal = lhsBool->getValue();
+        bool rhsVal = rhsBool->getValue();
+        bool result;
+
+        if constexpr (OpKind == BinaryOpKindBoolToBool::And) {
+            result = lhsVal && rhsVal;
+        } else if constexpr (OpKind == BinaryOpKindBoolToBool::Or) {
+            result = lhsVal || rhsVal;
+        }
+
+        return std::make_unique<InterpreterValueBool>(result);
+    }
+
+    std::unique_ptr<AstExpr> clone() const override {
+        return std::make_unique<AstExprBinaryBoolToBool<OpKind>>(
             LHS->clone(),
             RHS->clone()
         );
