@@ -6,6 +6,34 @@
 #include <optional>
 
 
+class InterpreterValue {
+public:
+    virtual ~InterpreterValue() = default;
+    virtual std::unique_ptr<InterpreterValue> clone() const = 0;
+};
+
+class InterpreterValueLong : public InterpreterValue {
+    long Value;
+public:
+    InterpreterValueLong(const long &Value) : Value(Value) {}
+    long getValue() const { return Value; }
+    std::unique_ptr<InterpreterValue> clone() const override {
+        return std::make_unique<InterpreterValueLong>(Value);
+    }
+};
+
+class InterpreterValueBool : public InterpreterValue {
+    bool Value;
+public:
+    InterpreterValueBool(const bool &Value) : Value(Value) {}
+    long getValue() const { return Value; }
+    std::unique_ptr<InterpreterValue> clone() const override {
+        return std::make_unique<InterpreterValueBool>(Value);
+    }
+};
+
+
+
 // Forward declarations
 class Context;
 class AstExpr;
@@ -16,20 +44,38 @@ class AstPrototype;
 class AstExpr {
 public:
     virtual ~AstExpr() = default;
-    virtual std::unique_ptr<AstExpr> eval(const Context& context) const = 0;
+    virtual std::unique_ptr<InterpreterValue> eval(const Context& context) const = 0;
     virtual std::unique_ptr<AstExpr> clone() const = 0;
 };
 
 class AstExprConst : public AstExpr {
+    virtual std::unique_ptr<InterpreterValue> getValue() const = 0;
+    std::unique_ptr<InterpreterValue> eval(const Context& context) const override {
+        return getValue();
+    }
+};
+
+class AstExprConstLong : public AstExprConst {
     long Value;
 public:
-    AstExprConst(const long &Value) : Value(Value) {}
-    long getValue() const { return Value; }
-    std::unique_ptr<AstExpr> eval(const Context& context) const override {
-        return std::make_unique<AstExprConst>(Value);
+    AstExprConstLong(const long &Value) : Value(Value) {}
+    std::unique_ptr<InterpreterValue> getValue() const {
+        return std::make_unique<InterpreterValueLong>(Value);
     }
     std::unique_ptr<AstExpr> clone() const override {
-        return std::make_unique<AstExprConst>(Value);
+        return std::make_unique<AstExprConstLong>(Value);
+    }
+};
+
+class AstExprConstBool : public AstExprConst {
+    bool Value;
+public:
+    AstExprConstBool(const bool &Value) : Value(Value) {}
+    std::unique_ptr<InterpreterValue> getValue() const {
+        return std::make_unique<InterpreterValueBool>(Value);
+    }
+    std::unique_ptr<AstExpr> clone() const override {
+        return std::make_unique<AstExprConstBool>(Value);
     }
 };
 
@@ -51,7 +97,7 @@ public:
         : Proto(std::move(Proto)), Body(std::move(Body)) {}
 
     const AstPrototype* getPrototype() const { return Proto.get(); }
-    std::unique_ptr<AstExpr> eval(const Context& context) const;
+    std::unique_ptr<InterpreterValue> eval(const Context& context) const;
     std::unique_ptr<AstFunction> clone() const {
         return std::make_unique<AstFunction>(
             std::make_unique<AstPrototype>(
@@ -65,15 +111,15 @@ public:
 
 class Context {
 public:
-    std::optional<long> getValue(const std::string& name) const {
+    InterpreterValue* getValue(const std::string& name) const {
         auto it = variables.find(name);
         if (it != variables.end()) {
-            return it->second;
+            return it->second.get();
         }
-        return std::nullopt;
+        return nullptr;
     }
-    void setValue(const std::string& name, long value) {
-        variables[name] = value;
+    void setValue(const std::string& name, std::unique_ptr<InterpreterValue> value) {
+        variables[name] = std::move(value);
     }
     const AstFunction* getFunction(const std::string& name) const {
         auto it = functions.find(name);
@@ -97,11 +143,13 @@ public:
         for (const auto & [ key, value ] : functions) {
             newContext->addFunction(std::unique_ptr<AstFunction>(value->clone()));
         }
-        newContext->variables = this->variables;
+        for (const auto& [name, val] : this->variables) {
+            newContext->setValue(name, val->clone());
+        }
         return newContext;
     }
 private:
-    std::unordered_map<std::string, long> variables;
+    std::unordered_map<std::string, std::unique_ptr<InterpreterValue>> variables;
     std::unordered_map<std::string, std::unique_ptr<AstFunction>> functions;
 };
 
@@ -111,12 +159,12 @@ class AstExprVariable : public AstExpr {
 public:
     AstExprVariable(const std::string &Name) : Name(Name) {}
     const std::string& getName() const { return Name; }
-    std::unique_ptr<AstExpr> eval(const Context& context) const override {
+    std::unique_ptr<InterpreterValue> eval(const Context& context) const override {
         auto value = context.getValue(Name);
-        if (value.has_value()) {
-            return std::make_unique<AstExprConst>(value.value());
+        if (value) {
+            return value->clone();
         }
-        return std::make_unique<AstExprVariable>(Name);
+        return nullptr;
     }
     std::unique_ptr<AstExpr> clone() const override {
         return std::make_unique<AstExprVariable>(Name);
@@ -131,37 +179,28 @@ public:
                 std::vector<std::unique_ptr<AstExpr>> Args)
         : Callee(Callee), Args(std::move(Args)) {}
     
-    std::unique_ptr<AstExpr> eval(const Context& context) const override {
+    std::unique_ptr<InterpreterValue> eval(const Context& context) const override {
         const AstFunction* calleeFunc = context.getFunction(Callee);
+        if (!calleeFunc) {
+            return nullptr;
+        }
         
-        std::vector<std::unique_ptr<AstExpr>> evaluatedArgs;
-        bool allArgsEvaluated = true;
+        std::vector<std::unique_ptr<InterpreterValue>> evaluatedArgs;
         for (const auto& arg : this->Args) {
             auto evaluated = arg->eval(context);
-            if (dynamic_cast<AstExprConst*>(evaluated.get())) {
-                evaluatedArgs.push_back(std::move(evaluated));
-            } else {
-                allArgsEvaluated = false;
-                evaluatedArgs.push_back(std::move(evaluated));
+            if (!evaluated) {
+                return nullptr;
             }
+            evaluatedArgs.push_back(std::move(evaluated));
         }
         
-        if (!calleeFunc || !allArgsEvaluated) {
-            return std::make_unique<AstExprCall>(Callee, std::move(evaluatedArgs));
-        }
-        
-        std::vector<long> evaluatedArgValues;
-        for(const auto& arg : evaluatedArgs) {
-             evaluatedArgValues.push_back(dynamic_cast<AstExprConst*>(arg.get())->getValue());
-        }
-
         std::unique_ptr<Context> funcContext = context.cloneFunctionContext();
         const auto& protoArgs = calleeFunc->getPrototype()->getArgs();
-        if (protoArgs.size() != evaluatedArgValues.size()) {
+        if (protoArgs.size() != evaluatedArgs.size()) {
             return nullptr;
         }
         for (size_t i = 0; i < protoArgs.size(); ++i) {
-            funcContext->setValue(protoArgs[i], evaluatedArgValues[i]);
+            funcContext->setValue(protoArgs[i], std::move(evaluatedArgs[i]));
         }
 
         return calleeFunc->eval(*funcContext);
@@ -186,15 +225,15 @@ public:
                 std::unique_ptr<AstExpr> Body)
         : Variable(Variable), Expr(std::move(Expr)), Body(std::move(Body)) {}
     
-    std::unique_ptr<AstExpr> eval(const Context& context) const override {
+    std::unique_ptr<InterpreterValue> eval(const Context& context) const override {
 
-        std::unique_ptr<AstExpr> evaluatedExpr = Expr->eval(context);
-        if (!dynamic_cast<AstExprConst*>(evaluatedExpr.get())) {
-            return std::make_unique<AstExprLetIn>(Variable, evaluatedExpr->clone(), Body->clone());
+       std::unique_ptr<InterpreterValue> evaluatedExpr = Expr->eval(context);
+        if (!evaluatedExpr) {
+            return nullptr;
         }
 
         std::unique_ptr<Context> newContext = context.clone();
-        newContext->setValue(Variable, dynamic_cast<AstExprConst*>(evaluatedExpr.get())->getValue());
+        newContext->setValue(Variable, std::move(evaluatedExpr));
         
         return Body->eval(*newContext);
     }
@@ -215,41 +254,38 @@ public:
     AstExprBinary(std::unique_ptr<AstExpr> LHS, std::unique_ptr<AstExpr> RHS)
         : LHS(std::move(LHS)), RHS(std::move(RHS)) {}
     
-    std::unique_ptr<AstExpr> eval(const Context& context) const override {
-        auto evaluatedLHS = LHS->eval(context);
-        auto evaluatedRHS = RHS->eval(context);
+    std::unique_ptr<InterpreterValue> eval(const Context& context) const override {
+        auto valueLHS = LHS->eval(context);
+        auto valueRHS = RHS->eval(context);
 
-        AstExprConst* lhsConst = dynamic_cast<AstExprConst*>(evaluatedLHS.get());
-        AstExprConst* rhsConst = dynamic_cast<AstExprConst*>(evaluatedRHS.get());
-
-        if (lhsConst && rhsConst) {
-            long result;
-            long lhsVal = lhsConst->getValue();
-            long rhsVal = rhsConst->getValue();
-
-            if constexpr (OpKind == BinaryOpKind::Add) {
-                result = lhsVal + rhsVal;
-            } else if constexpr (OpKind == BinaryOpKind::Sub) {
-                result = lhsVal - rhsVal;
-            } else if constexpr (OpKind == BinaryOpKind::Mul) {
-                result = lhsVal * rhsVal;
-            } else if constexpr (OpKind == BinaryOpKind::Div) {
-                if (rhsVal != 0) {
-                    result = lhsVal / rhsVal;
-                } else {
-                    return std::make_unique<AstExprBinary<OpKind>>(
-                        std::move(evaluatedLHS),
-                        std::move(evaluatedRHS)
-                    );
-                }
-            }
-            return std::make_unique<AstExprConst>(result);
+        if (!valueLHS || !valueRHS) {
+            return nullptr;
         }
 
-        return std::make_unique<AstExprBinary<OpKind>>(
-            std::move(evaluatedLHS),
-            std::move(evaluatedRHS)
-        );
+        auto lhsLong = dynamic_cast<InterpreterValueLong*>(valueLHS.get());
+        auto rhsLong = dynamic_cast<InterpreterValueLong*>(valueRHS.get());
+        if (!lhsLong || !rhsLong) {
+            return nullptr; // type mismatch
+        }
+
+        long lhsVal = lhsLong->getValue();
+        long rhsVal = rhsLong->getValue();
+        long result;
+
+        if constexpr (OpKind == BinaryOpKind::Add) {
+            result = lhsVal + rhsVal;
+        } else if constexpr (OpKind == BinaryOpKind::Sub) {
+            result = lhsVal - rhsVal;
+        } else if constexpr (OpKind == BinaryOpKind::Mul) {
+            result = lhsVal * rhsVal;
+        } else if constexpr (OpKind == BinaryOpKind::Div) {
+            if (rhsVal == 0) {
+                return nullptr; // division by zero
+            }
+            result = lhsVal / rhsVal;
+        }
+
+        return std::make_unique<InterpreterValueLong>(result);
     }
 
     std::unique_ptr<AstExpr> clone() const override {
@@ -260,6 +296,6 @@ public:
     }
 };
 
-std::unique_ptr<AstExpr> AstFunction::eval(const Context& context) const {
+std::unique_ptr<InterpreterValue> AstFunction::eval(const Context& context) const {
     return Body->eval(context);
 }
