@@ -209,39 +209,3 @@ public:
 std::unique_ptr<AstExpr> AstFunction::eval(const Context& context) const {
     return Body->eval(context);
 }
-
-int main() {
-    auto addFuncBody = std::make_unique<AstExprBinary<BinaryOpKind::Add>>(
-        std::make_unique<AstExprVariable>("x"),
-        std::make_unique<AstExprVariable>("y")
-    );
-    auto addFuncProto = std::make_unique<AstPrototype>("add", std::vector<std::string>{"x", "y"});
-    auto addFunc = std::make_unique<AstFunction>(std::move(addFuncProto), std::move(addFuncBody));
-
-    std::vector<std::unique_ptr<AstExpr>> args = std::vector<std::unique_ptr<AstExpr>>{};
-    args.push_back(std::make_unique<AstExprConst>(5));
-    args.push_back(std::make_unique<AstExprConst>(3));
-
-    auto callExpr = std::make_unique<AstExprCall>("add", std::move(args));
-
-    auto mainFuncBody = std::make_unique<AstExprBinary<BinaryOpKind::Sub>>(
-        callExpr->clone(),
-        callExpr->clone()
-    );
-    auto mainFuncProto = std::make_unique<AstPrototype>("main", std::vector<std::string>{});
-    AstFunction mainFunc(std::move(mainFuncProto), std::move(mainFuncBody));
-
-    Context globalContext;
-    globalContext.addFunction(std::move(addFunc));
-
-    auto evaluatedExpr = mainFunc.eval(globalContext);
-    
-    AstExprConst* resultConst = dynamic_cast<AstExprConst*>(evaluatedExpr.get());
-    if (resultConst) {
-        std::cout << "Result: " << resultConst->getValue() << std::endl;
-    } else {
-        std::cout << "Could not fully evaluate the expression." << std::endl;
-    }
-
-    return 0;
-}

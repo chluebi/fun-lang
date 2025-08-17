@@ -19,11 +19,11 @@ find_package(LLVM 17 REQUIRED CONFIG
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 
 
-add_executable(interpreter src/interpreter.cpp)
 
-target_compile_options(interpreter PRIVATE
+# interpreter tests
+add_executable(interpreter_tests src/test_interpreter.cpp)
+target_compile_options(interpreter_tests PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
     $<$<CXX_COMPILER_ID:MSVC>:/W4>
 )
-
-target_link_libraries(interpreter PRIVATE LLVM)
+target_link_libraries(interpreter_tests PRIVATE LLVM)
