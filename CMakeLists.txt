@@ -27,3 +27,12 @@ target_compile_options(interpreter_tests PRIVATE
     $<$<CXX_COMPILER_ID:MSVC>:/W4>
 )
 target_link_libraries(interpreter_tests PRIVATE LLVM)
+
+
+# Main interpreter executable
+add_executable(interpreter src/main.cpp src/parser.cpp src/lexer.cpp src/interpreter.cpp)
+target_compile_options(interpreter PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
+    $<$<CXX_COMPILER_ID:MSVC>:/W4>
+)
+target_link_libraries(interpreter PRIVATE LLVM)
