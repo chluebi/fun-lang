@@ -84,27 +84,24 @@ void Lexer::parseOperator() {
             text += consume();
             kind = TokenKind::Neq;
         } else {
-            // Unrecognized token, handle error or skip
-            kind = TokenKind::Eof;
+            throw LexerException("Unrecognized token '!'", SourceLocation{startPos, CurrentPos});
         }
     } else if (c1 == '&') {
         if (c2 == '&') {
             text += consume();
             kind = TokenKind::And;
         } else {
-             // Unrecognized token, handle error or skip
-            kind = TokenKind::Eof;
+            throw LexerException("Unrecognized token '&'", SourceLocation{startPos, CurrentPos});
         }
     } else if (c1 == '|') {
         if (c2 == '|') {
             text += consume();
             kind = TokenKind::Or;
         } else {
-             // Unrecognized token, handle error or skip
-            kind = TokenKind::Eof;
+            throw LexerException("Unrecognized token '|'", SourceLocation{startPos, CurrentPos});
         }
     } else {
-        kind = TokenKind::Eof; // Or an Unknown token kind
+        throw LexerException("Unrecognized token '" + std::string(1, c1) + "'", SourceLocation{startPos, CurrentPos});
     }
 
     CurrentToken = Token{kind, text, -1, SourceLocation{startPos, CurrentPos}};

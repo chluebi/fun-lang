@@ -7,6 +7,7 @@
 #include <iostream>
 
 #include "source_location.hpp"
+#include "lexer_exception.hpp"
 
 enum class TokenKind {
     Eof,
