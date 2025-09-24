@@ -1,4 +1,5 @@
 #include "parser.hpp"
+#include "source_location.hpp"
 #include <functional>
 
 bool Parser::consume(TokenKind kind) {
@@ -50,40 +51,88 @@ std::unique_ptr<AstExpr> Parser::parseExpression() {
             // Create the binary expression node based on the operator kind
             switch (binOp) {
                 case TokenKind::Add:
-                    LHS = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>>(std::move(LHS), std::move(RHS));
+                    LHS = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>>(
+                        mergeLocations(LHS->getLocation(), RHS->getLocation()),
+                        std::move(LHS),
+                        std::move(RHS)
+                    );
                     break;
                 case TokenKind::Sub:
-                    LHS = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>>(std::move(LHS), std::move(RHS));
+                    LHS = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>>(
+                        mergeLocations(LHS->getLocation(), RHS->getLocation()),
+                        std::move(LHS),
+                        std::move(RHS)
+                    );
                     break;
                 case TokenKind::Mul:
-                    LHS = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>>(std::move(LHS), std::move(RHS));
+                    LHS = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>>(
+                        mergeLocations(LHS->getLocation(), RHS->getLocation()),
+                        std::move(LHS),
+                        std::move(RHS)
+                    );
                     break;
                 case TokenKind::Div:
-                    LHS = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Div>>(std::move(LHS), std::move(RHS));
+                    LHS = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Div>>(
+                        mergeLocations(LHS->getLocation(), RHS->getLocation()),
+                        std::move(LHS),
+                        std::move(RHS)
+                    );
                     break;
                 case TokenKind::Eq:
-                    LHS = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>>(std::move(LHS), std::move(RHS));
+                    LHS = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>>(
+                        mergeLocations(LHS->getLocation(), RHS->getLocation()),
+                        std::move(LHS),
+                        std::move(RHS)
+                    );
                     break;
                 case TokenKind::Neq:
-                    LHS = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Neq>>(std::move(LHS), std::move(RHS));
+                    LHS = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Neq>>(
+                        mergeLocations(LHS->getLocation(), RHS->getLocation()),
+                        std::move(LHS),
+                        std::move(RHS)
+                    );
                     break;
                 case TokenKind::Leq:
-                    LHS = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Leq>>(std::move(LHS), std::move(RHS));
+                    LHS = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Leq>>(
+                        mergeLocations(LHS->getLocation(), RHS->getLocation()),
+                        std::move(LHS),
+                        std::move(RHS)
+                    );
                     break;
                 case TokenKind::Lt:
-                    LHS = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Lt>>(std::move(LHS), std::move(RHS));
+                    LHS = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Lt>>(
+                        mergeLocations(LHS->getLocation(), RHS->getLocation()),
+                        std::move(LHS),
+                        std::move(RHS)
+                    );
                     break;
                 case TokenKind::Geq:
-                    LHS = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Geq>>(std::move(LHS), std::move(RHS));
+                    LHS = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Geq>>(
+                        mergeLocations(LHS->getLocation(), RHS->getLocation()),
+                        std::move(LHS),
+                        std::move(RHS)
+                    );
                     break;
                 case TokenKind::Gt:
-                    LHS = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>>(std::move(LHS), std::move(RHS));
+                    LHS = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>>(
+                        mergeLocations(LHS->getLocation(), RHS->getLocation()),
+                        std::move(LHS),
+                        std::move(RHS)
+                    );
                     break;
                 case TokenKind::And:
-                    LHS = std::make_unique<AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>>(std::move(LHS), std::move(RHS));
+                    LHS = std::make_unique<AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>>(
+                        mergeLocations(LHS->getLocation(), RHS->getLocation()),
+                        std::move(LHS),
+                        std::move(RHS)
+                    );
                     break;
                 case TokenKind::Or:
-                    LHS = std::make_unique<AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>>(std::move(LHS), std::move(RHS));
+                    LHS = std::make_unique<AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>>(
+                        mergeLocations(LHS->getLocation(), RHS->getLocation()),
+                        std::move(LHS),
+                        std::move(RHS)
+                    );
                     break;
                 default:
                     return std::unique_ptr<AstExpr>(nullptr); // Should not happen
@@ -94,19 +143,20 @@ std::unique_ptr<AstExpr> Parser::parseExpression() {
 }
 
 std::unique_ptr<AstExpr> Parser::parsePrimary() {
-    switch (get().Kind) {
+    Token currentToken = get();
+    switch (currentToken.Kind) {
         case TokenKind::Number: {
-            auto val = std::make_unique<AstExprConstLong>(get().Value);
+            auto val = std::make_unique<AstExprConstLong>(currentToken.Location, currentToken.Value);
             nextToken();
             return val;
         }
         case TokenKind::True: {
-            auto val = std::make_unique<AstExprConstBool>(true);
+            auto val = std::make_unique<AstExprConstBool>(currentToken.Location, true);
             nextToken();
             return val;
         }
         case TokenKind::False: {
-            auto val = std::make_unique<AstExprConstBool>(false);
+            auto val = std::make_unique<AstExprConstBool>(currentToken.Location, false);
             nextToken();
             return val;
         }
@@ -131,6 +181,7 @@ std::unique_ptr<AstExpr> Parser::parsePrimary() {
 }
 
 std::unique_ptr<AstExpr> Parser::parseLetIn() {
+    Token letToken = get();
     nextToken(); // consume 'let'
     if (get().Kind != TokenKind::Identifier) {
         reportError("Expected identifier after 'let'");
@@ -153,10 +204,11 @@ std::unique_ptr<AstExpr> Parser::parseLetIn() {
     auto body = parseExpression();
     if (!body) return nullptr;
 
-    return std::make_unique<AstExprLetIn>(varName, std::move(expr), std::move(body));
+    return std::make_unique<AstExprLetIn>(mergeLocations(letToken.Location, body->getLocation()), varName, std::move(expr), std::move(body));
 }
 
 std::unique_ptr<AstExpr> Parser::parseMatch() {
+    SourceLocation startLocation = get().Location;
     nextToken(); // consume 'match'
     if (!consume(TokenKind::LBrace)) {
         reportError("Expected '{' after 'match'");
@@ -173,24 +225,25 @@ std::unique_ptr<AstExpr> Parser::parseMatch() {
         }
         auto body = parseExpression();
         if (!body) return nullptr;
-        paths.push_back(std::make_unique<AstExprMatchPath>(std::move(guard), std::move(body)));
+        paths.push_back(std::make_unique<AstExprMatchPath>(mergeLocations(guard->getLocation(), body->getLocation()), std::move(guard), std::move(body)));
         consume(TokenKind::Comma); // Optional comma
     }
 
+    SourceLocation endLocation = get().Location;
     if (!consume(TokenKind::RBrace)) {
         reportError("Expected '}' after match paths");
         return nullptr;
     }
-    return std::make_unique<AstExprMatch>(std::move(paths));
+    return std::make_unique<AstExprMatch>(mergeLocations(startLocation, endLocation), std::move(paths));
 }
 
 
 std::unique_ptr<AstExpr> Parser::parseCallOrVariable() {
-    std::string name = get().Text;
+    Token nameToken = get();
     nextToken(); // consume identifier
 
     if (get().Kind != TokenKind::LParen) {
-        return std::make_unique<AstExprVariable>(name);
+        return std::make_unique<AstExprVariable>(nameToken.Location, nameToken.Text);
     }
 
     nextToken(); // consume '('
@@ -209,9 +262,10 @@ std::unique_ptr<AstExpr> Parser::parseCallOrVariable() {
             }
         }
     }
+    Token endToken = get();
     nextToken(); // consume ')'
 
-    return std::make_unique<AstExprCall>(name, std::move(args));
+    return std::make_unique<AstExprCall>(mergeLocations(nameToken.Location, endToken.Location), nameToken.Text, std::move(args));
 }
 
 std::unique_ptr<AstPrototype> Parser::parsePrototype() {
@@ -219,7 +273,7 @@ std::unique_ptr<AstPrototype> Parser::parsePrototype() {
         reportError("Expected function name in prototype");
         return nullptr;
     }
-    std::string funcName = get().Text;
+    Token funcNameToken = get();
     nextToken(); // consume name
 
     if (!consume(TokenKind::LParen)) {
@@ -227,23 +281,25 @@ std::unique_ptr<AstPrototype> Parser::parsePrototype() {
         return nullptr;
     }
 
-    std::vector<std::string> args;
+    std::vector<AstArg> args;
     while (get().Kind == TokenKind::Identifier) {
-        args.push_back(get().Text);
+        args.push_back(AstArg {get().Location, get().Text});
         nextToken();
         if (get().Kind == TokenKind::Comma) {
             nextToken();
         }
     }
 
+    Token endToken = get();
     if (!consume(TokenKind::RParen)) {
         reportError("Expected ')' after argument list");
         return nullptr;
     }
-    return std::make_unique<AstPrototype>(funcName, std::move(args));
+    return std::make_unique<AstPrototype>(mergeLocations(funcNameToken.Location, endToken.Location), funcNameToken.Text, std::move(args));
 }
 
 std::unique_ptr<AstFunction> Parser::parseFunction() {
+    Token startToken = get();
     nextToken(); // consume 'fn'
     auto proto = parsePrototype();
     if (!proto) return nullptr;
@@ -255,12 +311,13 @@ std::unique_ptr<AstFunction> Parser::parseFunction() {
     auto body = parseExpression();
     if (!body) return nullptr;
 
+    Token endToken = get();
     if (!consume(TokenKind::RBrace)) {
         reportError("Expected '}' at end of function body");
         return nullptr;
     }
 
-    return std::make_unique<AstFunction>(std::move(proto), std::move(body));
+    return std::make_unique<AstFunction>(mergeLocations(startToken.Location, endToken.Location), std::move(proto), std::move(body));
 }
 
 std::optional<std::unique_ptr<AstFunction>> Parser::parseTopLevelFunction() {
