@@ -211,7 +211,7 @@ std::unique_ptr<AstExpr> Parser::parseMatch() {
     nextToken(); // consume 'match'
     Token lbraceToken = get();
     if (!consume(TokenKind::LBrace)) {
-        throw ParserException("Expected '{' after match, found " + tokenToString(lbraceToken) + " instead", lbraceToken.Location);
+        throw ParserException("Expected '{' after 'match', found " + tokenToString(lbraceToken) + " instead", lbraceToken.Location);
     }
 
     std::vector<std::unique_ptr<AstExprMatchPath>> paths;
@@ -223,12 +223,12 @@ std::unique_ptr<AstExpr> Parser::parseMatch() {
 
         Token arrowToken = get();
         if (!consume(TokenKind::Arrow)) {
-            throw ParserException("Expected '->' after match, found " + tokenToString(arrowToken) + " instead", arrowToken.Location);
+            throw ParserException("Expected '->' after guard condition, found " + tokenToString(arrowToken) + " instead", arrowToken.Location);
         }
 
         size_t matchPathExprLexerPos = getLexerPosition();
         auto body = parseExpression();
-        if (!body) throw ParserException("Invalid match path condition", SourceLocation {matchPathExprLexerPos, getLexerPosition()});
+        if (!body) throw ParserException("Invalid match path expression", SourceLocation {matchPathExprLexerPos, getLexerPosition()});
 
         paths.push_back(std::make_unique<AstExprMatchPath>(mergeLocations(guard->getLocation(), body->getLocation()), std::move(guard), std::move(body)));
         consume(TokenKind::Comma); // Optional comma
@@ -313,7 +313,7 @@ std::unique_ptr<AstFunction> Parser::parseFunction() {
 
     Token lbraceToken = get();
     if (!consume(TokenKind::LBrace)) {
-        throw ParserException("Expected '{' after function name, found " + tokenToString(lbraceToken) + " instead", lbraceToken.Location);
+        throw ParserException("Expected '{' after function prototype, found " + tokenToString(lbraceToken) + " instead", lbraceToken.Location);
     }
     size_t bodyStartLexerPos = getLexerPosition();
     auto body = parseExpression();
@@ -321,7 +321,7 @@ std::unique_ptr<AstFunction> Parser::parseFunction() {
 
     Token endToken = get();
     if (!consume(TokenKind::RBrace)) {
-        throw ParserException("Expected '}' after function name, found " + tokenToString(endToken) + " instead", endToken.Location);
+        throw ParserException("Expected '}' after function body, found " + tokenToString(endToken) + " instead", endToken.Location);
     }
 
     return std::make_unique<AstFunction>(mergeLocations(startToken.Location, endToken.Location), std::move(proto), std::move(body));

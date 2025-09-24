@@ -1,20 +1,19 @@
 #include <iostream>
-#include <stdexcept>
-#include <memory>
+#include <string>
 
 #include "runner.hpp"
+#include "lexer_exception.hpp"
+#include "parser_exception.hpp"
 
 
 int main(int argc, char* argv[]) {
     if (argc != 2) {
-        std::cerr << "Usage: " << argv[0] << " <input_file.lang>" << std::endl;
+        std::cerr << "Usage: " << argv[0] << " <filename>" << std::endl;
         return 1;
     }
-    
+
     try {
         std::unique_ptr<InterpreterValue> result = runFile(argv[1]);
-
-        // Print the result of the execution
         if (result) {
             if (auto longResult = dynamic_cast<InterpreterValueLong*>(result.get())) {
                 std::cout << "Execution result: " << longResult->getValue() << std::endl;
@@ -22,27 +21,21 @@ int main(int argc, char* argv[]) {
                 std::cout << "Execution result: " << (boolResult->getValue() ? "true" : "false") << std::endl;
             } else {
                 std::cerr << "Execution completed, but the result is of an unhandled type." << std::endl;
-                return 1; // Indicate failure
+                return 1;
             }
-        } else {
-            std::cerr << "Execution failed or returned null." << std::endl;
-            return 1; // Indicate failure
         }
-
-    } catch (const FileError& e) {
-        std::cerr << "File Error: " << e.what() << std::endl;
-        return 1;
-    } catch (const ParsingError& e) {
-        std::cerr << "Parsing Error: " << e.what() << std::endl;
-        return 1;
-    } catch (const EvaluationError& e) {
-        std::cerr << "Evaluation Error: " << e.what() << std::endl;
-        return 1;
+    } catch (const LexerException& e) {
+        std::cerr << "Lexer Error: " << e.what() << std::endl;
+        std::string sourceCode = readFile(argv[1]);
+        printAffectedCode(sourceCode, e.Location, argv[1]);
+    } catch (const ParserException& e) {
+        std::cerr << "Parser Error: " << e.what() << std::endl;
+        std::string sourceCode = readFile(argv[1]);
+        printAffectedCode(sourceCode, e.Location, argv[1]);
     } catch (const std::exception& e) {
-        // Catch any other standard exceptions
-        std::cerr << "An unexpected error occurred: " << e.what() << std::endl;
+        std::cerr << "Runtime Error: " << e.what() << std::endl;
         return 1;
     }
-
+    
     return 0;
 }
