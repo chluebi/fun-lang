@@ -6,6 +6,8 @@
 #include <optional>
 #include <iostream>
 
+#include "source_location.hpp"
+
 enum class TokenKind {
     Eof,
     Fn, Let, In, Match,
@@ -24,6 +26,7 @@ struct Token {
     TokenKind Kind;
     std::string Text;
     long Value;
+    SourceLocation Location;
 };
 
 class Lexer {
@@ -62,7 +65,7 @@ public:
     Token nextToken() {
         skipWhitespace();
         if (CurrentPos >= Input.length()) {
-            CurrentToken = Token{TokenKind::Eof, "", -1};
+            CurrentToken = Token{TokenKind::Eof, "", -1, SourceLocation{CurrentPos, CurrentPos}};
             return *CurrentToken;
         }
 

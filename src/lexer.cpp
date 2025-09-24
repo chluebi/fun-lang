@@ -1,6 +1,7 @@
 #include "lexer.hpp"
 
 void Lexer::parseIdentifierOrKeyword() {
+    size_t startPos = CurrentPos;
     std::string text;
     char c = peek();
     while (isIdentifierChar(c)) {
@@ -18,10 +19,11 @@ void Lexer::parseIdentifierOrKeyword() {
     else if (text == "false") kind = TokenKind::False;
     else kind = TokenKind::Identifier;
 
-    CurrentToken = Token{kind, text, -1};
+    CurrentToken = Token{kind, text, -1, SourceLocation{startPos, CurrentPos}};
 }
 
 void Lexer::parseNumber() {
+    size_t startPos = CurrentPos;
     std::string text;
     char c = peek();
     while (isdigit(c)) {
@@ -29,10 +31,11 @@ void Lexer::parseNumber() {
         consume();
         c = peek();
     }
-    CurrentToken = Token{TokenKind::Number, text, std::stol(text)};
+    CurrentToken = Token{TokenKind::Number, text, std::stol(text), SourceLocation{startPos, CurrentPos}};
 }
 
 void Lexer::parseOperator() {
+    size_t startPos = CurrentPos;
     std::string text;
     char c1 = consume();
     char c2 = peek();
@@ -104,5 +107,5 @@ void Lexer::parseOperator() {
         kind = TokenKind::Eof; // Or an Unknown token kind
     }
 
-    CurrentToken = Token{kind, text};
+    CurrentToken = Token{kind, text, -1, SourceLocation{startPos, CurrentPos}};
 }
