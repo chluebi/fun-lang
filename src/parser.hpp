@@ -1,5 +1,6 @@
 #include "lexer.hpp"
 #include "interpreter.hpp"
+#include "parser_exception.hpp"
 
 class Parser {
     Lexer TheLexer;
@@ -18,6 +19,7 @@ class Parser {
 public:
     Parser(const std::string& input) : TheLexer(input) {}
     const Token& get() const { return TheLexer.get(); }
+    size_t getLexerPosition() { return TheLexer.getCurrentPosition(); }
     std::unique_ptr<AstExpr> parseExpression();
     std::unique_ptr<AstFunction> parseFunction();
     std::optional<std::unique_ptr<AstFunction>> parseTopLevelFunction();

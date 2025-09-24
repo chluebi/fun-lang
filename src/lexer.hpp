@@ -30,6 +30,8 @@ struct Token {
     SourceLocation Location;
 };
 
+std::string tokenToString(Token kind);
+
 class Lexer {
     const std::string& Input;
     size_t CurrentPos = 0;
@@ -61,6 +63,10 @@ public:
 
     const Token& get() const {
         return *CurrentToken;
+    }
+
+    size_t getCurrentPosition() {
+        return CurrentPos;
     }
 
     Token nextToken() {

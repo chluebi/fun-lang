@@ -1,5 +1,40 @@
 #include "lexer.hpp"
 
+std::string tokenToString(Token token) {
+    switch (token.Kind) {
+        case TokenKind::Eof: return "Eof";
+        case TokenKind::Fn: return "fn";
+        case TokenKind::Let: return "let";
+        case TokenKind::In: return "in";
+        case TokenKind::Match: return "match";
+        case TokenKind::LParen: return "(";
+        case TokenKind::RParen: return ")";
+        case TokenKind::LBrace: return "{";
+        case TokenKind::RBrace: return "}";
+        case TokenKind::Equal: return "==";
+        case TokenKind::Comma: return ",";
+        case TokenKind::Arrow: return "->";
+        case TokenKind::Add: return "+";
+        case TokenKind::Sub: return "-";
+        case TokenKind::Mul: return "*";
+        case TokenKind::Div: return "/";
+        case TokenKind::Eq: return "==";
+        case TokenKind::Neq: return "!=";
+        case TokenKind::Leq: return "<=";
+        case TokenKind::Lt: return "<";
+        case TokenKind::Geq: return ">=";
+        case TokenKind::Gt: return ">";
+        case TokenKind::And: return "&&";
+        case TokenKind::Or: return "||";
+        case TokenKind::Identifier: return token.Text;
+        case TokenKind::Number: return std::to_string(token.Value);
+        case TokenKind::True: return "true";
+        case TokenKind::False: return "false";
+        case TokenKind::Unknown: return "Unknown";
+        default: return "Unknown!!";
+    }
+}
+
 void Lexer::parseIdentifierOrKeyword() {
     size_t startPos = CurrentPos;
     std::string text;

@@ -10,10 +10,6 @@ bool Parser::consume(TokenKind kind) {
     return false;
 }
 
-void Parser::reportError(const std::string& msg) {
-    std::cerr << "Parser error: " << msg << " at token " << get().Text << std::endl;
-}
-
 int Parser::getOpPrecedence(TokenKind kind) {
     switch (kind) {
         case TokenKind::Or: return 10;
@@ -27,8 +23,9 @@ int Parser::getOpPrecedence(TokenKind kind) {
 }
 
 std::unique_ptr<AstExpr> Parser::parseExpression() {
+    size_t startlexerPos = getLexerPosition();
     auto LHS = parsePrimary();
-    if (!LHS) return nullptr;
+    if (!LHS) throw ParserException("Invalid LHS", SourceLocation {startlexerPos, getLexerPosition()});
 
     std::function<std::unique_ptr<AstExpr>(int, std::unique_ptr<AstExpr>)> 
     parseBinOpRHS = [&](int exprPrec, std::unique_ptr<AstExpr> LHS) {
@@ -166,16 +163,15 @@ std::unique_ptr<AstExpr> Parser::parsePrimary() {
         case TokenKind::LParen: {
             nextToken();
             auto expr = parseExpression();
+            Token end = get();
             if (!expr || !consume(TokenKind::RParen)) {
-                reportError("Expected ')' after expression");
-                return nullptr;
+                throw ParserException("Expected ')' after expression, found " + tokenToString(end) + " instead", end.Location);
             }
             return expr;
         }
         case TokenKind::Let: return parseLetIn();
         case TokenKind::Match: return parseMatch();
         default:
-            reportError("Unknown primary expression");
             return nullptr;
     }
 }
@@ -184,25 +180,28 @@ std::unique_ptr<AstExpr> Parser::parseLetIn() {
     Token letToken = get();
     nextToken(); // consume 'let'
     if (get().Kind != TokenKind::Identifier) {
-        reportError("Expected identifier after 'let'");
-        return nullptr;
+        throw ParserException("Expected identifier after 'let', found " + tokenToString(get()) + " instead", get().Location);
     }
     std::string varName = get().Text;
     nextToken(); // consume identifier
 
+    Token equalToken = get();
     if (!consume(TokenKind::Equal)) {
-        reportError("Expected '=' after variable name");
-        return nullptr;
+        throw ParserException("Expected '=' after variable name, found " + tokenToString(equalToken) + " instead", equalToken.Location);
     }
-    auto expr = parseExpression();
-    if (!expr) return nullptr;
 
+    size_t letExprLexerPos = getLexerPosition();
+    auto expr = parseExpression();
+    if (!expr) throw ParserException("Invalid let expression in let in", SourceLocation {letExprLexerPos, getLexerPosition()});
+
+    Token inToken = get();
     if (!consume(TokenKind::In)) {
-        reportError("Expected 'in' after expression");
-        return nullptr;
+        throw ParserException("Expected 'in' after expression, found " + tokenToString(inToken) + " instead", inToken.Location);
     }
+
+    size_t inExprLexerPos = getLexerPosition();
     auto body = parseExpression();
-    if (!body) return nullptr;
+    if (!body) throw ParserException("Invalid in expression in let in", SourceLocation {inExprLexerPos, getLexerPosition()});
 
     return std::make_unique<AstExprLetIn>(mergeLocations(letToken.Location, body->getLocation()), varName, std::move(expr), std::move(body));
 }
@@ -210,29 +209,35 @@ std::unique_ptr<AstExpr> Parser::parseLetIn() {
 std::unique_ptr<AstExpr> Parser::parseMatch() {
     SourceLocation startLocation = get().Location;
     nextToken(); // consume 'match'
+    Token lbraceToken = get();
     if (!consume(TokenKind::LBrace)) {
-        reportError("Expected '{' after 'match'");
-        return nullptr;
+        throw ParserException("Expected '{' after match, found " + tokenToString(lbraceToken) + " instead", lbraceToken.Location);
     }
 
     std::vector<std::unique_ptr<AstExprMatchPath>> paths;
     while (get().Kind != TokenKind::RBrace && get().Kind != TokenKind::Eof) {
+
+        size_t guardExprLexerPos = getLexerPosition();
         auto guard = parseExpression();
-        if (!guard) return nullptr;
+        if (!guard) throw ParserException("Invalid guard condition", SourceLocation {guardExprLexerPos, getLexerPosition()});
+
+        Token arrowToken = get();
         if (!consume(TokenKind::Arrow)) {
-            reportError("Expected '->' after guard expression");
-            return nullptr;
+            throw ParserException("Expected '->' after match, found " + tokenToString(arrowToken) + " instead", arrowToken.Location);
         }
+
+        size_t matchPathExprLexerPos = getLexerPosition();
         auto body = parseExpression();
-        if (!body) return nullptr;
+        if (!body) throw ParserException("Invalid match path condition", SourceLocation {matchPathExprLexerPos, getLexerPosition()});
+
         paths.push_back(std::make_unique<AstExprMatchPath>(mergeLocations(guard->getLocation(), body->getLocation()), std::move(guard), std::move(body)));
         consume(TokenKind::Comma); // Optional comma
     }
 
     SourceLocation endLocation = get().Location;
+    Token rbraceToken = get();
     if (!consume(TokenKind::RBrace)) {
-        reportError("Expected '}' after match paths");
-        return nullptr;
+        throw ParserException("Expected '}' after match paths, found " + tokenToString(rbraceToken) + " instead", rbraceToken.Location);
     }
     return std::make_unique<AstExprMatch>(mergeLocations(startLocation, endLocation), std::move(paths));
 }
@@ -250,15 +255,18 @@ std::unique_ptr<AstExpr> Parser::parseCallOrVariable() {
     std::vector<std::unique_ptr<AstExpr>> args;
     if (get().Kind != TokenKind::RParen) {
         while (true) {
+
+            size_t callArgExprLexerPosition = getLexerPosition();
             if (auto arg = parseExpression()) {
                 args.push_back(std::move(arg));
             } else {
-                return nullptr;
+                throw ParserException("Invalid Call Argument ", SourceLocation {callArgExprLexerPosition, getLexerPosition()});
             }
+
+            Token nextToken = get();
             if (get().Kind == TokenKind::RParen) break;
             if (!consume(TokenKind::Comma)) {
-                reportError("Expected ',' or ')' in argument list");
-                return nullptr;
+                throw ParserException("Expected ',' or ')' after argument, found " + tokenToString(nextToken) + " instead", nextToken.Location);
             }
         }
     }
@@ -270,15 +278,14 @@ std::unique_ptr<AstExpr> Parser::parseCallOrVariable() {
 
 std::unique_ptr<AstPrototype> Parser::parsePrototype() {
     if (get().Kind != TokenKind::Identifier) {
-        reportError("Expected function name in prototype");
-        return nullptr;
+        throw ParserException("Expected function name, found " + tokenToString(get()) + " instead", get().Location);
     }
     Token funcNameToken = get();
     nextToken(); // consume name
 
+    Token lbraceToken = get();
     if (!consume(TokenKind::LParen)) {
-        reportError("Expected '(' after function name");
-        return nullptr;
+        throw ParserException("Expected '(' after function name, found " + tokenToString(lbraceToken) + " instead", lbraceToken.Location);
     }
 
     std::vector<AstArg> args;
@@ -292,8 +299,7 @@ std::unique_ptr<AstPrototype> Parser::parsePrototype() {
 
     Token endToken = get();
     if (!consume(TokenKind::RParen)) {
-        reportError("Expected ')' after argument list");
-        return nullptr;
+        throw ParserException("Expected ')' after argument list, found " + tokenToString(endToken) + " instead", endToken.Location);
     }
     return std::make_unique<AstPrototype>(mergeLocations(funcNameToken.Location, endToken.Location), funcNameToken.Text, std::move(args));
 }
@@ -301,20 +307,21 @@ std::unique_ptr<AstPrototype> Parser::parsePrototype() {
 std::unique_ptr<AstFunction> Parser::parseFunction() {
     Token startToken = get();
     nextToken(); // consume 'fn'
+    size_t protoStartLexerPos = getLexerPosition();
     auto proto = parsePrototype();
-    if (!proto) return nullptr;
+    if (!proto) throw ParserException("Invalid function prototype", SourceLocation {protoStartLexerPos, getLexerPosition()});
 
+    Token lbraceToken = get();
     if (!consume(TokenKind::LBrace)) {
-        reportError("Expected '{' for function body");
-        return nullptr;
+        throw ParserException("Expected '{' after function name, found " + tokenToString(lbraceToken) + " instead", lbraceToken.Location);
     }
+    size_t bodyStartLexerPos = getLexerPosition();
     auto body = parseExpression();
-    if (!body) return nullptr;
+    if (!body) throw ParserException("Invalid function body", SourceLocation {bodyStartLexerPos, getLexerPosition()});
 
     Token endToken = get();
     if (!consume(TokenKind::RBrace)) {
-        reportError("Expected '}' at end of function body");
-        return nullptr;
+        throw ParserException("Expected '}' after function name, found " + tokenToString(endToken) + " instead", endToken.Location);
     }
 
     return std::make_unique<AstFunction>(mergeLocations(startToken.Location, endToken.Location), std::move(proto), std::move(body));
@@ -324,6 +331,5 @@ std::optional<std::unique_ptr<AstFunction>> Parser::parseTopLevelFunction() {
     if (get().Kind == TokenKind::Fn) {
         return parseFunction();
     }
-    reportError("Expected top-level function definition");
-    return std::nullopt;
+    throw ParserException("Expected top function definition, found " + tokenToString(get()) + " instead", get().Location);
 }
