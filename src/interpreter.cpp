@@ -1,5 +1,7 @@
 #include "interpreter.hpp"
+#include "interpreter_exception.hpp"
 #include <utility>
+#include <string>
 
 InterpreterValueLong::InterpreterValueLong(const long &Value) : Value(Value) {}
 long InterpreterValueLong::getValue() const { return Value; }
@@ -65,25 +67,25 @@ std::unique_ptr<InterpreterValue> Interpreter::eval(const AstExpr& expr, const C
     }
     if (const auto* varExpr = dynamic_cast<const AstExprVariable*>(&expr)) {
         auto value = context.getValue(varExpr->getName());
-        return value ? value->clone() : nullptr;
+        if (!value) {
+            throw UndefinedVariableException(varExpr->getName(), varExpr->getLocation());
+        }
+        return value->clone();
     }
     if (const auto* callExpr = dynamic_cast<const AstExprCall*>(&expr)) {
         const AstFunction* calleeFunc = context.getFunction(callExpr->getCallee());
         if (!calleeFunc) {
-            return nullptr;
+            throw UndefinedFunctionException(callExpr->getCallee(), callExpr->getLocation());
         }
         std::vector<std::unique_ptr<InterpreterValue>> evaluatedArgs;
         for (const auto& arg : callExpr->getArgs()) {
             auto evaluated = this->eval(*arg, context);
-            if (!evaluated) {
-                return nullptr;
-            }
             evaluatedArgs.push_back(std::move(evaluated));
         }
         std::unique_ptr<Context> funcContext = context.cloneFunctionContext();
         const auto& protoArgs = calleeFunc->getPrototype()->getArgs();
         if (protoArgs.size() != evaluatedArgs.size()) {
-            return nullptr;
+            throw ArityMismatchException(calleeFunc->getPrototype()->getName(), protoArgs.size(), evaluatedArgs.size(), callExpr->getLocation());
         }
         for (size_t i = 0; i < protoArgs.size(); ++i) {
             funcContext->setValue(protoArgs[i].Name, std::move(evaluatedArgs[i]));
@@ -92,9 +94,6 @@ std::unique_ptr<InterpreterValue> Interpreter::eval(const AstExpr& expr, const C
     }
     if (const auto* letInExpr = dynamic_cast<const AstExprLetIn*>(&expr)) {
         std::unique_ptr<InterpreterValue> evaluatedExpr = this->eval(*letInExpr->getExpr(), context);
-        if (!evaluatedExpr) {
-            return nullptr;
-        }
         std::unique_ptr<Context> newContext = context.clone();
         newContext->setValue(letInExpr->getVariable(), std::move(evaluatedExpr));
         return this->eval(*letInExpr->getBody(), *newContext);
@@ -102,18 +101,16 @@ std::unique_ptr<InterpreterValue> Interpreter::eval(const AstExpr& expr, const C
     if (const auto* matchExpr = dynamic_cast<const AstExprMatch*>(&expr)) {
         for (const auto& path : matchExpr->getPaths()) {
             auto evaluated = this->eval(*path->getGuard(), context);
-            if (!evaluated) {
-                return nullptr;
-            }
+            
             auto evaluatedBool = dynamic_cast<InterpreterValueBool*>(evaluated.get());
             if (!evaluatedBool) {
-                return nullptr;
+                throw TypeMismatchException("Match guard must evaluate to a boolean", path->getLocation());
             }
             if (evaluatedBool->getValue()) {
                 return this->eval(*path->getBody(), context);
             }
         }
-        return nullptr;
+        throw NoMatchFoundException(matchExpr->getLocation());
     }
 
 #define EVAL_BIN_INT_TO_INT(OP_TYPE, OP) \
@@ -150,7 +147,7 @@ std::unique_ptr<InterpreterValue> Interpreter::eval(const AstExpr& expr, const C
 
 #undef EVAL_BIN_BOOL_TO_BOOL
 
-    return nullptr;
+    throw InterpreterException("Unknown AST node type encountered during evaluation", expr.getLocation());
 }
 
 std::unique_ptr<InterpreterValue> Interpreter::evalBinaryIntToInt(
@@ -159,10 +156,16 @@ std::unique_ptr<InterpreterValue> Interpreter::evalBinaryIntToInt(
 {
     auto valueLHS = this->eval(lhs, context);
     auto valueRHS = this->eval(rhs, context);
-    if (!valueLHS || !valueRHS) return nullptr;
+    
     auto lhsLong = dynamic_cast<InterpreterValueLong*>(valueLHS.get());
     auto rhsLong = dynamic_cast<InterpreterValueLong*>(valueRHS.get());
-    if (!lhsLong || !rhsLong) return nullptr;
+    
+    if (!lhsLong) {
+        throw TypeMismatchException("LHS of integer binary operation is not an integer", lhs.getLocation());
+    }
+    if (!rhsLong) {
+        throw TypeMismatchException("RHS of integer binary operation is not an integer", rhs.getLocation());
+    }
 
     long lhsVal = lhsLong->getValue();
     long rhsVal = rhsLong->getValue();
@@ -175,10 +178,12 @@ std::unique_ptr<InterpreterValue> Interpreter::evalBinaryIntToInt(
     } else if (op == BinaryOpKindIntToInt::Mul) {
         result = lhsVal * rhsVal;
     } else if (op == BinaryOpKindIntToInt::Div) {
-        if (rhsVal == 0) return nullptr;
+        if (rhsVal == 0) {
+            throw DivisionByZeroException(rhs.getLocation());
+        }
         result = lhsVal / rhsVal;
     } else {
-        return nullptr;
+        throw InterpreterException("Invalid IntToInt operation kind", lhs.getLocation());
     }
     return std::make_unique<InterpreterValueLong>(result);
 }
@@ -189,10 +194,16 @@ std::unique_ptr<InterpreterValue> Interpreter::evalBinaryIntToBool(
 {
     auto valueLHS = this->eval(lhs, context);
     auto valueRHS = this->eval(rhs, context);
-    if (!valueLHS || !valueRHS) return nullptr;
+    
     auto lhsLong = dynamic_cast<InterpreterValueLong*>(valueLHS.get());
     auto rhsLong = dynamic_cast<InterpreterValueLong*>(valueRHS.get());
-    if (!lhsLong || !rhsLong) return nullptr;
+    
+    if (!lhsLong) {
+        throw TypeMismatchException("LHS of integer comparison is not an integer", lhs.getLocation());
+    }
+    if (!rhsLong) {
+        throw TypeMismatchException("RHS of integer comparison is not an integer", rhs.getLocation());
+    }
 
     long lhsVal = lhsLong->getValue();
     long rhsVal = rhsLong->getValue();
@@ -204,7 +215,7 @@ std::unique_ptr<InterpreterValue> Interpreter::evalBinaryIntToBool(
     else if (op == BinaryOpKindIntToBool::Lt) result = lhsVal < rhsVal;
     else if (op == BinaryOpKindIntToBool::Geq) result = lhsVal >= rhsVal;
     else if (op == BinaryOpKindIntToBool::Gt) result = lhsVal > rhsVal;
-    else return nullptr;
+    else throw InterpreterException("Invalid IntToBool operation kind", lhs.getLocation());
 
     return std::make_unique<InterpreterValueBool>(result);
 }
@@ -215,17 +226,23 @@ std::unique_ptr<InterpreterValue> Interpreter::evalBinaryBoolToBool(
 {
     auto valueLHS = this->eval(lhs, context);
     auto valueRHS = this->eval(rhs, context);
-    if (!valueLHS || !valueRHS) return nullptr;
+    
     auto lhsBool = dynamic_cast<InterpreterValueBool*>(valueLHS.get());
     auto rhsBool = dynamic_cast<InterpreterValueBool*>(valueRHS.get());
-    if (!lhsBool || !rhsBool) return nullptr;
+    
+    if (!lhsBool) {
+        throw TypeMismatchException("LHS of boolean binary operation is not a boolean", lhs.getLocation());
+    }
+    if (!rhsBool) {
+        throw TypeMismatchException("RHS of boolean binary operation is not a boolean", rhs.getLocation());
+    }
 
     bool lhsVal = lhsBool->getValue();
     bool rhsVal = rhsBool->getValue();
     bool result;
     if (op == BinaryOpKindBoolToBool::And) result = lhsVal && rhsVal;
     else if (op == BinaryOpKindBoolToBool::Or) result = lhsVal || rhsVal;
-    else return nullptr;
+    else throw InterpreterException("Invalid BoolToBool operation kind", lhs.getLocation());
 
     return std::make_unique<InterpreterValueBool>(result);
 }

@@ -4,7 +4,9 @@
 #include <string>
 #include <vector>
 #include <stdexcept>
+#include <filesystem>
 #include <memory>
+#include <utility>
 
 #include "interpreter.hpp"
 #include "parser.hpp"
@@ -12,9 +14,9 @@
 #include "runner.hpp"
 #include "lexer_exception.hpp"
 #include "parser_exception.hpp"
-#include <filesystem>
+#include "interpreter_exception.hpp"
 
-// A simple utility function to read the entire content of a file into a string
+
 std::string readFile(const std::string& filePath) {
     std::ifstream fileStream(filePath);
     if (!fileStream.is_open()) {
@@ -25,7 +27,6 @@ std::string readFile(const std::string& filePath) {
     return buffer.str();
 }
 
-// Helper function to get line and column information from a position
 std::pair<size_t, size_t> getLineAndCol(const std::string& source, size_t pos) {
     size_t line = 1;
     size_t col = 1;
@@ -40,7 +41,6 @@ std::pair<size_t, size_t> getLineAndCol(const std::string& source, size_t pos) {
     return {line, col};
 }
 
-// Helper function to extract and print affected lines
 void printAffectedCode(const std::string& source, const SourceLocation& loc, const std::string& filePath) {
     auto [line, col] = getLineAndCol(source, loc.StartPos);
     
@@ -79,7 +79,8 @@ void printAffectedCode(const std::string& source, const SourceLocation& loc, con
 
 
 std::unique_ptr<InterpreterValue> runFile(char file[]) {
-    std::string sourceCode = readFile(file);
+    std::string filePath = file;
+    std::string sourceCode = readFile(filePath);
 
     Parser parser(sourceCode);
     Context globalContext;
@@ -87,7 +88,7 @@ std::unique_ptr<InterpreterValue> runFile(char file[]) {
     while (parser.get().Kind == TokenKind::Fn) {
         auto func = parser.parseFunction();
         if (!func) {
-            throw ParsingError("Parsing failed while defining a function.");
+            throw ParserException("Parsing failed while defining a function.", SourceLocation{0, 0});
         }
         globalContext.addFunction(std::move(func));
     }
@@ -95,19 +96,19 @@ std::unique_ptr<InterpreterValue> runFile(char file[]) {
     auto resultExpr = parser.parseExpression();
 
     if (!resultExpr) {
-        throw ParsingError("Parsing failed for the main expression.");
+        throw ParserException("Parsing failed for the main expression.", parser.get().Location);
     }
-
-    auto interpreter = std::unique_ptr<Interpreter>();
-    std::unique_ptr<InterpreterValue> result = interpreter->eval(*resultExpr, globalContext);
+    
+    Interpreter interpreter;
+    std::unique_ptr<InterpreterValue> result = interpreter.eval(*resultExpr, globalContext);
 
     if (result) {
         if (dynamic_cast<InterpreterValueLong*>(result.get()) || dynamic_cast<InterpreterValueBool*>(result.get())) {
             return result;
         } else {
-            throw EvaluationError("Execution completed, but the result is of an unhandled type.");
+            throw InterpreterException("Execution completed, but the result is of an unexpected internal type.", resultExpr->getLocation());
         }
     } else {
-        throw EvaluationError("Execution failed or returned null.");
+        throw InterpreterException("Interpreter::eval returned null unexpectedly.", resultExpr->getLocation());
     }
 }
