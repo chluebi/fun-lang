@@ -1,36 +1,26 @@
+#include <stdexcept>
+#include <iostream>
+
 #include "interpreter.hpp"
+#include "interpreter_exception.hpp"
 #include "tests.hpp"
 
-// This helper function checks if the evaluation was successful and returns the
-// correct type, then extracts the long value. It fails the test if not.
+
 long getLongResult(std::unique_ptr<InterpreterValue> result_val) {
-    if (!result_val) {
-        std::cout << RED << "Assertion Failed: evaluation returned nullptr" << RESET << std::endl;
-        SimpleTestFramework::globalTestRunner.failTest();
-        return -1; // Return a dummy value
-    }
 
     auto* result_long_ptr = dynamic_cast<InterpreterValueLong*>(result_val.get());
     if (!result_long_ptr) {
-        std::cout << RED << "Assertion Failed: evaluation returned incorrect type" << RESET << std::endl;
+        std::cout << RED << "Assertion Failed: evaluation returned incorrect type (expected Long)" << RESET << std::endl;
         SimpleTestFramework::globalTestRunner.failTest();
         return -1; // Return a dummy value
     }
     return result_long_ptr->getValue();
 }
 
-// This helper function checks if the evaluation was successful and returns the
-// correct type, then extracts the bool value. It fails the test if not.
 bool getBoolResult(std::unique_ptr<InterpreterValue> result_val) {
-    if (!result_val) {
-        std::cout << RED << "Assertion Failed: evaluation returned nullptr" << RESET << std::endl;
-        SimpleTestFramework::globalTestRunner.failTest();
-        return false;
-    }
-
     auto* result_bool_ptr = dynamic_cast<InterpreterValueBool*>(result_val.get());
     if (!result_bool_ptr) {
-        std::cout << RED << "Assertion Failed: evaluation returned incorrect type" << RESET << std::endl;
+        std::cout << RED << "Assertion Failed: evaluation returned incorrect type (expected Bool)" << RESET << std::endl;
         SimpleTestFramework::globalTestRunner.failTest();
         return false;
     }
@@ -38,10 +28,8 @@ bool getBoolResult(std::unique_ptr<InterpreterValue> result_val) {
 }
 
 
-// This function will test a single expression and return the evaluated value
 std::unique_ptr<InterpreterValue> evaluateExpression(std::unique_ptr<AstExpr> expr) {
     Context context;
-
 
     auto addFuncBody = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>>(
         SourceLocation {0, 0},
@@ -69,12 +57,9 @@ std::unique_ptr<InterpreterValue> evaluateExpression(std::unique_ptr<AstExpr> ex
     context.addFunction(std::move(multiplyFunc));
 
 
-    // Factorial function
     auto factorialProto = std::make_unique<AstPrototype>(SourceLocation {0, 0}, "factorial", std::vector<AstArg>{
         AstArg {SourceLocation {0, 0}, "n"}
     });
-    
-    // Base case: n == 0
     auto factMatchGuard1 = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>>(
         SourceLocation {0, 0},
         std::make_unique<AstExprVariable>(SourceLocation {0, 0}, "n"),
@@ -82,46 +67,38 @@ std::unique_ptr<InterpreterValue> evaluateExpression(std::unique_ptr<AstExpr> ex
     );
     auto factMatchBody1 = std::make_unique<AstExprConstLong>(SourceLocation {0, 0}, 1L);
     auto factMatchPath1 = std::make_unique<AstExprMatchPath>(SourceLocation {0, 0}, std::move(factMatchGuard1), std::move(factMatchBody1));
-
-    // Recursive case: n > 0
     auto factMatchGuard2 = std::make_unique<AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>>(
         SourceLocation {0, 0},
         std::make_unique<AstExprVariable>(SourceLocation {0, 0}, "n"),
         std::make_unique<AstExprConstLong>(SourceLocation {0, 0}, 0L)
     );
-    
-    // Arguments for recursive call: n-1
     auto factRecurseArg = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>>(
         SourceLocation {0, 0},
         std::make_unique<AstExprVariable>(SourceLocation {0, 0}, "n"),
         std::make_unique<AstExprConstLong>(SourceLocation {0, 0}, 1L)
     );
-    
-    // Recursive call: factorial(n - 1)
     std::vector<std::unique_ptr<AstExpr>> factCallArgs;
     factCallArgs.push_back(std::move(factRecurseArg));
     auto factRecurseCall = std::make_unique<AstExprCall>(SourceLocation {0, 0}, "factorial", std::move(factCallArgs));
-    
-    // Body: n * factorial(n - 1)
     auto factMatchBody2 = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>>(
         SourceLocation {0, 0},
         std::make_unique<AstExprVariable>(SourceLocation {0, 0}, "n"),
         std::move(factRecurseCall)
     );
-    
     auto factMatchPath2 = std::make_unique<AstExprMatchPath>(SourceLocation {0, 0}, std::move(factMatchGuard2), std::move(factMatchBody2));
-
     std::vector<std::unique_ptr<AstExprMatchPath>> factPaths;
     factPaths.push_back(std::move(factMatchPath1));
     factPaths.push_back(std::move(factMatchPath2));
-    
     auto factorialBody = std::make_unique<AstExprMatch>(SourceLocation {0, 0}, std::move(factPaths));
     auto factorialFunc = std::make_unique<AstFunction>(SourceLocation {0, 0}, std::move(factorialProto), std::move(factorialBody));
     context.addFunction(std::move(factorialFunc));
 
+    Interpreter interpreter;
+    std::unique_ptr<InterpreterValue> result;
     
-    auto interpreter = std::unique_ptr<Interpreter>();
-    return interpreter->eval(*expr, context);
+    ASSERT_NOT_THROWS(result = interpreter.eval(*expr, context)); 
+    
+    return result;
 }
 
 TEST_CASE(ConstantEvaluation) {
@@ -184,6 +161,7 @@ TEST_CASE(NestedBinaryExpressions) {
     long result = getLongResult(evaluateExpression(std::move(outer_expr)));
     ASSERT_EQ(30L, result); // (5 + 5) * 3 = 30
 }
+
 
 TEST_CASE(FunctionCall) {
     std::vector<std::unique_ptr<AstExpr>> args;
@@ -259,22 +237,29 @@ TEST_CASE(DivisionByZero) {
         std::make_unique<AstExprConstLong>(SourceLocation {0, 0}, 100L),
         std::make_unique<AstExprConstLong>(SourceLocation {0, 0}, 0L)
     );
-    std::unique_ptr<InterpreterValue> result = evaluateExpression(std::move(expr));
-    ASSERT_EQ(nullptr, result.get());
+    Interpreter interpreter;
+    ASSERT_THROWS(interpreter.eval(*expr, Context()), DivisionByZeroException);
 }
 
 TEST_CASE(FunctionCallWithWrongNumberOfArguments) {
     std::vector<std::unique_ptr<AstExpr>> args;
-    args.push_back(std::make_unique<AstExprConstLong>(SourceLocation {0, 0}, 10L));
+    args.push_back(std::make_unique<AstExprConstLong>(SourceLocation {0, 0}, 10L)); // missing one argument
     auto call_expr = std::make_unique<AstExprCall>(SourceLocation {0, 0}, "add", std::move(args));
-    std::unique_ptr<InterpreterValue> result = evaluateExpression(std::move(call_expr));
-    ASSERT_EQ(nullptr, result.get());
+    Interpreter interpreter;
+    Context context;
+    // Set up 'add' function again for local context testing
+    auto addFuncBody = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>>(SourceLocation {0, 0}, std::make_unique<AstExprVariable>(SourceLocation {0, 0}, "x"), std::make_unique<AstExprVariable>(SourceLocation {0, 0}, "y"));
+    auto addFuncProto = std::make_unique<AstPrototype>(SourceLocation {0, 0}, "add", std::vector<AstArg>{AstArg {SourceLocation {0, 0}, "x"}, AstArg {SourceLocation {0, 0}, "y"}});
+    auto addFunc = std::make_unique<AstFunction>(SourceLocation {0, 0}, std::move(addFuncProto), std::move(addFuncBody));
+    context.addFunction(std::move(addFunc));
+
+    ASSERT_THROWS(interpreter.eval(*call_expr, context), ArityMismatchException);
 }
 
 TEST_CASE(UnknownVariable) {
     auto expr = std::make_unique<AstExprVariable>(SourceLocation {0, 0}, "unknown_var");
-    std::unique_ptr<InterpreterValue> result = evaluateExpression(std::move(expr));
-    ASSERT_EQ(nullptr, result.get());
+    Interpreter interpreter;
+    ASSERT_THROWS(interpreter.eval(*expr, Context()), UndefinedVariableException);
 }
 
 TEST_CASE(UnknownFunction) {
@@ -282,19 +267,23 @@ TEST_CASE(UnknownFunction) {
     args.push_back(std::make_unique<AstExprConstLong>(SourceLocation {0, 0}, 1L));
     args.push_back(std::make_unique<AstExprConstLong>(SourceLocation {0, 0}, 2L));
     auto expr = std::make_unique<AstExprCall>(SourceLocation {0, 0}, "unknown_func", std::move(args));
-    std::unique_ptr<InterpreterValue> result = evaluateExpression(std::move(expr));
-    ASSERT_EQ(nullptr, result.get());
+    Interpreter interpreter;
+    ASSERT_THROWS(interpreter.eval(*expr, Context()), UndefinedFunctionException);
 }
 
 TEST_CASE(LetInVariableNotFound) {
-    auto body = std::make_unique<AstExprVariable>(SourceLocation {0, 0}, "x");
+    auto body = std::make_unique<AstExprVariable>(SourceLocation {0, 0}, "z");
+    
+    // let y := 10L in z
     auto expr = std::make_unique<AstExprLetIn>(SourceLocation {0, 0}, "y",
         std::make_unique<AstExprConstLong>(SourceLocation {0, 0}, 10L),
         std::move(body)
     );
-    std::unique_ptr<InterpreterValue> result = evaluateExpression(std::move(expr));
-    ASSERT_EQ(nullptr, result.get()); // 'x' is not defined
+    
+    Interpreter interpreter;
+    ASSERT_THROWS(interpreter.eval(*expr, Context()), UndefinedVariableException);
 }
+
 
 // --- Boolean Operations (False results) ---
 
@@ -486,20 +475,20 @@ TEST_CASE(BooleanAnd_TypeError) {
     auto expr = std::make_unique<AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>>(
         SourceLocation{0, 0},
         std::make_unique<AstExprConstBool>(SourceLocation{0, 0}, true),
-        std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 10L)
+        std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 10L) // Incorrect type
     );
-    std::unique_ptr<InterpreterValue> result = evaluateExpression(std::move(expr));
-    ASSERT_EQ(nullptr, result.get());
+    Interpreter interpreter;
+    ASSERT_THROWS(interpreter.eval(*expr, Context()), TypeMismatchException);
 }
 
 TEST_CASE(BooleanOr_TypeError) {
     auto expr = std::make_unique<AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>>(
         SourceLocation{0, 0},
-        std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 10L),
+        std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 10L), // Incorrect type
         std::make_unique<AstExprConstBool>(SourceLocation{0, 0}, true)
     );
-    std::unique_ptr<InterpreterValue> result = evaluateExpression(std::move(expr));
-    ASSERT_EQ(nullptr, result.get());
+    Interpreter interpreter;
+    ASSERT_THROWS(interpreter.eval(*expr, Context()), TypeMismatchException);
 }
 
 TEST_CASE(Match_FirstPathTrue) {
@@ -549,9 +538,10 @@ TEST_CASE(Match_NoPathTrue) {
         std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 20L)
     ));
     auto expr = std::make_unique<AstExprMatch>(SourceLocation{0, 0}, std::move(paths));
-    std::unique_ptr<InterpreterValue> result = evaluateExpression(std::move(expr));
-    ASSERT_EQ(nullptr, result.get());
+    Interpreter interpreter;
+    ASSERT_THROWS(interpreter.eval(*expr, Context()), NoMatchFoundException);
 }
+
 
 TEST_CASE(Match_WithLetInAndCalls) {
     // let x := 15L
@@ -625,6 +615,7 @@ TEST_CASE(Match_NestedExpressions) {
     ASSERT_EQ(20L, result);
 }
 
+
 TEST_CASE(Match_GuardTypeError) {
     std::vector<std::unique_ptr<AstExprMatchPath>> paths;
     
@@ -637,8 +628,8 @@ TEST_CASE(Match_GuardTypeError) {
     paths.push_back(std::make_unique<AstExprMatchPath>(SourceLocation{0, 0}, std::move(guard), std::move(body)));
     
     auto expr = std::make_unique<AstExprMatch>(SourceLocation{0, 0}, std::move(paths));
-    std::unique_ptr<InterpreterValue> result = evaluateExpression(std::move(expr));
-    ASSERT_EQ(nullptr, result.get());
+    Interpreter interpreter;
+    ASSERT_THROWS(interpreter.eval(*expr, Context()), TypeMismatchException);
 }
 
 TEST_CASE(Factorial) {

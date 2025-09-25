@@ -4,6 +4,9 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <stdexcept>
+
+#include "interpreter_exception.hpp"
 
 // ANSI escape codes for colors
 #define RED "\033[31m"
@@ -64,6 +67,37 @@ namespace SimpleTestFramework {
         } else { \
             std::cout << GREEN << "Assertion Passed: " << #expected << " == " << #actual << RESET << std::endl; \
         }
+
+    // New macro for expecting an InterpreterException
+    #define ASSERT_THROWS(expression, ExceptionType) \
+        try { \
+            expression; \
+            std::cout << RED << "Assertion Failed: Expected exception " << #ExceptionType << " but none was thrown." << RESET << std::endl; \
+            SimpleTestFramework::globalTestRunner.failTest(); \
+        } catch (const ExceptionType& e) { \
+            std::cout << GREEN << "Assertion Passed: Caught expected exception " << #ExceptionType << ": " << e.what() << RESET << std::endl; \
+        } catch (const InterpreterException& e) { \
+            std::cout << RED << "Assertion Failed: Expected exception " << #ExceptionType << " but caught a different InterpreterException: " << e.what() << RESET << std::endl; \
+            SimpleTestFramework::globalTestRunner.failTest(); \
+        } catch (const std::exception& e) { \
+            std::cout << RED << "Assertion Failed: Expected exception " << #ExceptionType << " but caught a general std::exception: " << e.what() << RESET << std::endl; \
+            SimpleTestFramework::globalTestRunner.failTest(); \
+        }
+
+    // New macro to wrap expressions that should NOT throw
+    #define ASSERT_NOT_THROWS(expression) \
+        try { \
+            expression; \
+        } catch (const InterpreterException& e) { \
+            std::cout << RED << "Assertion Failed: Did not expect an exception but caught InterpreterException: " << e.what() << RESET << std::endl; \
+            SimpleTestFramework::globalTestRunner.failTest(); \
+            return std::unique_ptr<InterpreterValue>(nullptr); \
+        } catch (const std::exception& e) { \
+            std::cout << RED << "Assertion Failed: Did not expect an exception but caught std::exception: " << e.what() << RESET << std::endl; \
+            SimpleTestFramework::globalTestRunner.failTest(); \
+            return std::unique_ptr<InterpreterValue>(nullptr); \
+        }
+
 
     #define RUN_ALL_TESTS() \
         SimpleTestFramework::globalTestRunner.runAll();
