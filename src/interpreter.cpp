@@ -1,4 +1,5 @@
 #include "interpreter.hpp"
+#include <utility>
 
 InterpreterValueLong::InterpreterValueLong(const long &Value) : Value(Value) {}
 long InterpreterValueLong::getValue() const { return Value; }
@@ -11,72 +12,6 @@ bool InterpreterValueBool::getValue() const { return Value; }
 std::unique_ptr<InterpreterValue> InterpreterValueBool::clone() const {
     return std::make_unique<InterpreterValueBool>(Value);
 }
-
-
-
-AstExpr::AstExpr(const SourceLocation& loc) : Location(loc) {}
-const SourceLocation& AstExpr::getLocation() const { return Location; }
-
-AstExprConst::AstExprConst(const SourceLocation& loc) : AstExpr(loc) {}
-std::unique_ptr<InterpreterValue> AstExprConst::eval(const Context& context) const {
-    (void) context; // silence unused parameter
-    return getValue();
-}
-
-AstExprConstLong::AstExprConstLong(const SourceLocation &loc, const long &Value) : AstExprConst(loc), Value(Value) {}
-std::unique_ptr<InterpreterValue> AstExprConstLong::getValue() const {
-    return std::make_unique<InterpreterValueLong>(Value);
-}
-std::unique_ptr<AstExpr> AstExprConstLong::clone() const {
-    return std::make_unique<AstExprConstLong>(Location, Value);
-}
-
-AstExprConstBool::AstExprConstBool(const SourceLocation &loc, const bool &Value) : AstExprConst(loc), Value(Value) {}
-std::unique_ptr<InterpreterValue> AstExprConstBool::getValue() const {
-    return std::make_unique<InterpreterValueBool>(Value);
-}
-std::unique_ptr<AstExpr> AstExprConstBool::clone() const {
-    return std::make_unique<AstExprConstBool>(Location, Value);
-}
-
-
-
-AstArg::AstArg(const SourceLocation& loc, const std::string& name)
-    : Location(loc), Name(name) {}
-
-AstPrototype::AstPrototype(const SourceLocation& loc, const std::string& name, std::vector<AstArg> args)
-    : Location(loc), Name(name), Args(std::move(args)) {}
-const SourceLocation& AstPrototype::getLocation() const { return Location; }
-const std::string& AstPrototype::getName() const { return Name; }
-const std::vector<AstArg>& AstPrototype::getArgs() const { return Args; }
-
-AstFunction::AstFunction(const SourceLocation &loc, std::unique_ptr<AstPrototype> Proto, std::unique_ptr<AstExpr> Body)
-    : Location(loc), Proto(std::move(Proto)), Body(std::move(Body)) {}
-const SourceLocation& AstFunction::getLocation() const { return Location; }
-const AstPrototype* AstFunction::getPrototype() const { return Proto.get(); }
-
-std::unique_ptr<InterpreterValue> AstFunction::eval(const Context& context) const {
-    return Body->eval(context);
-}
-
-std::unique_ptr<AstFunction> AstFunction::clone() const {
-    std::vector<AstArg> clonedArgs;
-    for (const auto& arg : Proto->getArgs()) {
-        clonedArgs.push_back(AstArg(arg.Location, arg.Name));
-    }
-
-    return std::make_unique<AstFunction>(
-        Location,
-        std::make_unique<AstPrototype>(
-            Proto->getLocation(),
-            Proto->getName(),
-            std::move(clonedArgs)
-        ),
-        Body->clone()
-    );
-}
-
-
 
 InterpreterValue* Context::getValue(const std::string& name) const {
     auto it = variables.find(name);
@@ -121,97 +56,109 @@ std::unique_ptr<Context> Context::clone() const {
     return newContext;
 }
 
-
-
-AstExprVariable::AstExprVariable(const SourceLocation &loc, const std::string &Name) : AstExpr(loc), Name(Name) {}
-const std::string& AstExprVariable::getName() const { return Name; }
-
-std::unique_ptr<InterpreterValue> AstExprVariable::eval(const Context& context) const {
-    auto value = context.getValue(Name);
-    if (value) {
-        return value->clone();
+std::unique_ptr<InterpreterValue> Interpreter::eval(const AstExpr& expr, const Context& context) const {
+    if (const auto* constExpr = dynamic_cast<const AstExprConstLong*>(&expr)) {
+        return std::make_unique<InterpreterValueLong>(constExpr->getValue());
     }
+    if (const auto* constExpr = dynamic_cast<const AstExprConstBool*>(&expr)) {
+        return std::make_unique<InterpreterValueBool>(constExpr->getValue());
+    }
+    if (const auto* varExpr = dynamic_cast<const AstExprVariable*>(&expr)) {
+        auto value = context.getValue(varExpr->getName());
+        return value ? value->clone() : nullptr;
+    }
+    if (const auto* callExpr = dynamic_cast<const AstExprCall*>(&expr)) {
+        const AstFunction* calleeFunc = context.getFunction(callExpr->getCallee());
+        if (!calleeFunc) {
+            return nullptr;
+        }
+        std::vector<std::unique_ptr<InterpreterValue>> evaluatedArgs;
+        for (const auto& arg : callExpr->getArgs()) {
+            auto evaluated = this->eval(*arg, context);
+            if (!evaluated) {
+                return nullptr;
+            }
+            evaluatedArgs.push_back(std::move(evaluated));
+        }
+        std::unique_ptr<Context> funcContext = context.cloneFunctionContext();
+        const auto& protoArgs = calleeFunc->getPrototype()->getArgs();
+        if (protoArgs.size() != evaluatedArgs.size()) {
+            return nullptr;
+        }
+        for (size_t i = 0; i < protoArgs.size(); ++i) {
+            funcContext->setValue(protoArgs[i].Name, std::move(evaluatedArgs[i]));
+        }
+        return this->eval(*calleeFunc->getBody(), *funcContext);
+    }
+    if (const auto* letInExpr = dynamic_cast<const AstExprLetIn*>(&expr)) {
+        std::unique_ptr<InterpreterValue> evaluatedExpr = this->eval(*letInExpr->getExpr(), context);
+        if (!evaluatedExpr) {
+            return nullptr;
+        }
+        std::unique_ptr<Context> newContext = context.clone();
+        newContext->setValue(letInExpr->getVariable(), std::move(evaluatedExpr));
+        return this->eval(*letInExpr->getBody(), *newContext);
+    }
+    if (const auto* matchExpr = dynamic_cast<const AstExprMatch*>(&expr)) {
+        for (const auto& path : matchExpr->getPaths()) {
+            auto evaluated = this->eval(*path->getGuard(), context);
+            if (!evaluated) {
+                return nullptr;
+            }
+            auto evaluatedBool = dynamic_cast<InterpreterValueBool*>(evaluated.get());
+            if (!evaluatedBool) {
+                return nullptr;
+            }
+            if (evaluatedBool->getValue()) {
+                return this->eval(*path->getBody(), context);
+            }
+        }
+        return nullptr;
+    }
+
+#define EVAL_BIN_INT_TO_INT(OP_TYPE, OP) \
+    if (const auto* binExpr = dynamic_cast<const AstExprBinaryIntToInt<OP_TYPE>*>(&expr)) { \
+        return evalBinaryIntToInt(*binExpr->getLHS(), *binExpr->getRHS(), context, OP_TYPE); \
+    }
+
+    EVAL_BIN_INT_TO_INT(BinaryOpKindIntToInt::Add, +);
+    EVAL_BIN_INT_TO_INT(BinaryOpKindIntToInt::Sub, -);
+    EVAL_BIN_INT_TO_INT(BinaryOpKindIntToInt::Mul, *);
+    EVAL_BIN_INT_TO_INT(BinaryOpKindIntToInt::Div, /);
+
+#undef EVAL_BIN_INT_TO_INT
+
+#define EVAL_BIN_INT_TO_BOOL(OP_TYPE, OP) \
+    if (const auto* binExpr = dynamic_cast<const AstExprBinaryIntToBool<OP_TYPE>*>(&expr)) { \
+        return evalBinaryIntToBool(*binExpr->getLHS(), *binExpr->getRHS(), context, OP_TYPE); \
+    }
+    EVAL_BIN_INT_TO_BOOL(BinaryOpKindIntToBool::Eq, ==);
+    EVAL_BIN_INT_TO_BOOL(BinaryOpKindIntToBool::Neq, !=);
+    EVAL_BIN_INT_TO_BOOL(BinaryOpKindIntToBool::Leq, <=);
+    EVAL_BIN_INT_TO_BOOL(BinaryOpKindIntToBool::Lt, <);
+    EVAL_BIN_INT_TO_BOOL(BinaryOpKindIntToBool::Geq, >=);
+    EVAL_BIN_INT_TO_BOOL(BinaryOpKindIntToBool::Gt, >);
+
+#undef EVAL_BIN_INT_TO_BOOL
+
+#define EVAL_BIN_BOOL_TO_BOOL(OP_TYPE, OP) \
+    if (const auto* binExpr = dynamic_cast<const AstExprBinaryBoolToBool<OP_TYPE>*>(&expr)) { \
+        return evalBinaryBoolToBool(*binExpr->getLHS(), *binExpr->getRHS(), context, OP_TYPE); \
+    }
+    EVAL_BIN_BOOL_TO_BOOL(BinaryOpKindBoolToBool::And, &&);
+    EVAL_BIN_BOOL_TO_BOOL(BinaryOpKindBoolToBool::Or, ||);
+
+#undef EVAL_BIN_BOOL_TO_BOOL
+
     return nullptr;
 }
 
-std::unique_ptr<AstExpr> AstExprVariable::clone() const {
-    return std::make_unique<AstExprVariable>(Location, Name);
-}
-
-
-AstExprCall::AstExprCall(const SourceLocation &loc, const std::string &Callee,
-            std::vector<std::unique_ptr<AstExpr>> Args) : AstExpr(loc), Callee(Callee), Args(std::move(Args)) {}
-
-std::unique_ptr<InterpreterValue> AstExprCall::eval(const Context& context) const {
-    const AstFunction* calleeFunc = context.getFunction(Callee);
-    if (!calleeFunc) {
-        return nullptr;
-    }
-
-    std::vector<std::unique_ptr<InterpreterValue>> evaluatedArgs;
-    for (const auto& arg : this->Args) {
-        auto evaluated = arg->eval(context);
-        if (!evaluated) {
-            return nullptr;
-        }
-        evaluatedArgs.push_back(std::move(evaluated));
-    }
-
-    std::unique_ptr<Context> funcContext = context.cloneFunctionContext();
-    const auto& protoArgs = calleeFunc->getPrototype()->getArgs();
-    if (protoArgs.size() != evaluatedArgs.size()) {
-        return nullptr;
-    }
-    for (size_t i = 0; i < protoArgs.size(); ++i) {
-        funcContext->setValue(protoArgs[i].Name, std::move(evaluatedArgs[i]));
-    }
-
-    return calleeFunc->eval(*funcContext);
-}
-
-std::unique_ptr<AstExpr> AstExprCall::clone() const {
-    std::vector<std::unique_ptr<AstExpr>> clonedArgs;
-    for (const auto& arg : Args) {
-        clonedArgs.push_back(arg->clone());
-    }
-    return std::make_unique<AstExprCall>(Location, Callee, std::move(clonedArgs));
-}
-
-
-AstExprLetIn::AstExprLetIn(const SourceLocation &loc,
-            const std::string &Variable,
-            std::unique_ptr<AstExpr> Expr,
-            std::unique_ptr<AstExpr> Body) :
-    AstExpr(loc), Variable(Variable), Expr(std::move(Expr)), Body(std::move(Body)) {}
-
-std::unique_ptr<InterpreterValue> AstExprLetIn::eval(const Context& context) const {
-    std::unique_ptr<InterpreterValue> evaluatedExpr = Expr->eval(context);
-    if (!evaluatedExpr) {
-        return nullptr;
-    }
-
-    std::unique_ptr<Context> newContext = context.clone();
-    newContext->setValue(Variable, std::move(evaluatedExpr));
-
-    return Body->eval(*newContext);
-}
-
-std::unique_ptr<AstExpr> AstExprLetIn::clone() const {
-    return std::make_unique<AstExprLetIn>(Location, Variable, Expr->clone(), Body->clone());
-}
-
-
-
-template <BinaryOpKindIntToInt OpKind>
-AstExprBinaryIntToInt<OpKind>::AstExprBinaryIntToInt(const SourceLocation &loc,
-                        std::unique_ptr<AstExpr> LHS,
-                        std::unique_ptr<AstExpr> RHS) :
-    AstExpr(loc), LHS(std::move(LHS)), RHS(std::move(RHS)) {}
-
-template <BinaryOpKindIntToInt OpKind>
-std::unique_ptr<InterpreterValue> AstExprBinaryIntToInt<OpKind>::eval(const Context& context) const {
-    auto valueLHS = LHS->eval(context);
-    auto valueRHS = RHS->eval(context);
+std::unique_ptr<InterpreterValue> Interpreter::evalBinaryIntToInt(
+    const AstExpr& lhs, const AstExpr& rhs, const Context& context,
+    BinaryOpKindIntToInt op) const
+{
+    auto valueLHS = this->eval(lhs, context);
+    auto valueRHS = this->eval(rhs, context);
     if (!valueLHS || !valueRHS) return nullptr;
     auto lhsLong = dynamic_cast<InterpreterValueLong*>(valueLHS.get());
     auto rhsLong = dynamic_cast<InterpreterValueLong*>(valueRHS.get());
@@ -221,41 +168,27 @@ std::unique_ptr<InterpreterValue> AstExprBinaryIntToInt<OpKind>::eval(const Cont
     long rhsVal = rhsLong->getValue();
     long result;
 
-    if constexpr (OpKind == BinaryOpKindIntToInt::Add) {
+    if (op == BinaryOpKindIntToInt::Add) {
         result = lhsVal + rhsVal;
-    } else if constexpr (OpKind == BinaryOpKindIntToInt::Sub) {
+    } else if (op == BinaryOpKindIntToInt::Sub) {
         result = lhsVal - rhsVal;
-    } else if constexpr (OpKind == BinaryOpKindIntToInt::Mul) {
+    } else if (op == BinaryOpKindIntToInt::Mul) {
         result = lhsVal * rhsVal;
-    } else if constexpr (OpKind == BinaryOpKindIntToInt::Div) {
+    } else if (op == BinaryOpKindIntToInt::Div) {
         if (rhsVal == 0) return nullptr;
         result = lhsVal / rhsVal;
+    } else {
+        return nullptr;
     }
     return std::make_unique<InterpreterValueLong>(result);
 }
 
-template <BinaryOpKindIntToInt OpKind>
-std::unique_ptr<AstExpr> AstExprBinaryIntToInt<OpKind>::clone() const {
-    return std::make_unique<AstExprBinaryIntToInt<OpKind>>(Location, LHS->clone(), RHS->clone());
-}
-
-
-template class AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>;
-template class AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>;
-template class AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>;
-template class AstExprBinaryIntToInt<BinaryOpKindIntToInt::Div>;
-
-
-template <BinaryOpKindIntToBool OpKind>
-AstExprBinaryIntToBool<OpKind>::AstExprBinaryIntToBool(const SourceLocation &loc,
-                        std::unique_ptr<AstExpr> LHS,
-                        std::unique_ptr<AstExpr> RHS) :
-    AstExpr(loc), LHS(std::move(LHS)), RHS(std::move(RHS)) {}
-
-template <BinaryOpKindIntToBool OpKind>
-std::unique_ptr<InterpreterValue> AstExprBinaryIntToBool<OpKind>::eval(const Context& context) const {
-    auto valueLHS = LHS->eval(context);
-    auto valueRHS = RHS->eval(context);
+std::unique_ptr<InterpreterValue> Interpreter::evalBinaryIntToBool(
+    const AstExpr& lhs, const AstExpr& rhs, const Context& context,
+    BinaryOpKindIntToBool op) const
+{
+    auto valueLHS = this->eval(lhs, context);
+    auto valueRHS = this->eval(rhs, context);
     if (!valueLHS || !valueRHS) return nullptr;
     auto lhsLong = dynamic_cast<InterpreterValueLong*>(valueLHS.get());
     auto rhsLong = dynamic_cast<InterpreterValueLong*>(valueRHS.get());
@@ -264,39 +197,24 @@ std::unique_ptr<InterpreterValue> AstExprBinaryIntToBool<OpKind>::eval(const Con
     long lhsVal = lhsLong->getValue();
     long rhsVal = rhsLong->getValue();
     bool result;
-    if constexpr (OpKind == BinaryOpKindIntToBool::Eq) result = lhsVal == rhsVal;
-    else if constexpr (OpKind == BinaryOpKindIntToBool::Neq) result = lhsVal != rhsVal;
-    else if constexpr (OpKind == BinaryOpKindIntToBool::Leq) result = lhsVal <= rhsVal;
-    else if constexpr (OpKind == BinaryOpKindIntToBool::Lt) result = lhsVal < rhsVal;
-    else if constexpr (OpKind == BinaryOpKindIntToBool::Geq) result = lhsVal >= rhsVal;
-    else if constexpr (OpKind == BinaryOpKindIntToBool::Gt) result = lhsVal > rhsVal;
+
+    if (op == BinaryOpKindIntToBool::Eq) result = lhsVal == rhsVal;
+    else if (op == BinaryOpKindIntToBool::Neq) result = lhsVal != rhsVal;
+    else if (op == BinaryOpKindIntToBool::Leq) result = lhsVal <= rhsVal;
+    else if (op == BinaryOpKindIntToBool::Lt) result = lhsVal < rhsVal;
+    else if (op == BinaryOpKindIntToBool::Geq) result = lhsVal >= rhsVal;
+    else if (op == BinaryOpKindIntToBool::Gt) result = lhsVal > rhsVal;
+    else return nullptr;
+
     return std::make_unique<InterpreterValueBool>(result);
 }
 
-template <BinaryOpKindIntToBool OpKind>
-std::unique_ptr<AstExpr> AstExprBinaryIntToBool<OpKind>::clone() const {
-    return std::make_unique<AstExprBinaryIntToBool<OpKind>>(Location, LHS->clone(), RHS->clone());
-}
-
-
-template class AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>;
-template class AstExprBinaryIntToBool<BinaryOpKindIntToBool::Neq>;
-template class AstExprBinaryIntToBool<BinaryOpKindIntToBool::Leq>;
-template class AstExprBinaryIntToBool<BinaryOpKindIntToBool::Lt>;
-template class AstExprBinaryIntToBool<BinaryOpKindIntToBool::Geq>;
-template class AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>;
-
-
-template <BinaryOpKindBoolToBool OpKind>
-AstExprBinaryBoolToBool<OpKind>::AstExprBinaryBoolToBool(const SourceLocation &loc,
-                        std::unique_ptr<AstExpr> LHS,
-                        std::unique_ptr<AstExpr> RHS) :
-    AstExpr(loc), LHS(std::move(LHS)), RHS(std::move(RHS)) {}
-
-template <BinaryOpKindBoolToBool OpKind>
-std::unique_ptr<InterpreterValue> AstExprBinaryBoolToBool<OpKind>::eval(const Context& context) const {
-    auto valueLHS = LHS->eval(context);
-    auto valueRHS = RHS->eval(context);
+std::unique_ptr<InterpreterValue> Interpreter::evalBinaryBoolToBool(
+    const AstExpr& lhs, const AstExpr& rhs, const Context& context,
+    BinaryOpKindBoolToBool op) const
+{
+    auto valueLHS = this->eval(lhs, context);
+    auto valueRHS = this->eval(rhs, context);
     if (!valueLHS || !valueRHS) return nullptr;
     auto lhsBool = dynamic_cast<InterpreterValueBool*>(valueLHS.get());
     auto rhsBool = dynamic_cast<InterpreterValueBool*>(valueRHS.get());
@@ -305,57 +223,9 @@ std::unique_ptr<InterpreterValue> AstExprBinaryBoolToBool<OpKind>::eval(const Co
     bool lhsVal = lhsBool->getValue();
     bool rhsVal = rhsBool->getValue();
     bool result;
-    if constexpr (OpKind == BinaryOpKindBoolToBool::And) result = lhsVal && rhsVal;
-    else if constexpr (OpKind == BinaryOpKindBoolToBool::Or) result = lhsVal || rhsVal;
+    if (op == BinaryOpKindBoolToBool::And) result = lhsVal && rhsVal;
+    else if (op == BinaryOpKindBoolToBool::Or) result = lhsVal || rhsVal;
+    else return nullptr;
+
     return std::make_unique<InterpreterValueBool>(result);
-}
-
-template <BinaryOpKindBoolToBool OpKind>
-std::unique_ptr<AstExpr> AstExprBinaryBoolToBool<OpKind>::clone() const {
-    return std::make_unique<AstExprBinaryBoolToBool<OpKind>>(Location, LHS->clone(), RHS->clone());
-}
-
-
-template class AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>;
-template class AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>;
-
-
-
-
-AstExprMatchPath::AstExprMatchPath(const SourceLocation &loc,
-                    std::unique_ptr<AstExpr> guard,
-                    std::unique_ptr<AstExpr> body) :
-    Location(loc), Guard(std::move(guard)), Body(std::move(body)) {}
-const SourceLocation& AstExprMatchPath::getLocation() const { return Location; }
-
-std::unique_ptr<AstExprMatchPath> AstExprMatchPath::clone() const {
-    return std::make_unique<AstExprMatchPath>(Location, Guard->clone(), Body->clone());
-}
-
-AstExprMatch::AstExprMatch(const SourceLocation &loc, std::vector<std::unique_ptr<AstExprMatchPath>> Paths) :
-    AstExpr(loc), Paths(std::move(Paths)) {}
-
-std::unique_ptr<InterpreterValue> AstExprMatch::eval(const Context& context) const {
-    for (const auto& path : this->Paths) {
-        auto evaluated = path->Guard->eval(context);
-        if (!evaluated) {
-            return nullptr;
-        }
-        auto evaluatedBool = dynamic_cast<InterpreterValueBool*>(evaluated.get());
-        if (!evaluatedBool) {
-            return nullptr;
-        }
-        if (evaluatedBool->getValue()) {
-            return path->Body->eval(context);
-        }
-    }
-    return nullptr;
-}
-
-std::unique_ptr<AstExpr> AstExprMatch::clone() const {
-    std::vector<std::unique_ptr<AstExprMatchPath>> clonedPaths;
-    for (const auto& path : Paths) {
-        clonedPaths.push_back(path->clone());
-    }
-    return std::make_unique<AstExprMatch>(Location, std::move(clonedPaths));
 }

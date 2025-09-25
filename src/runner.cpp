@@ -98,7 +98,8 @@ std::unique_ptr<InterpreterValue> runFile(char file[]) {
         throw ParsingError("Parsing failed for the main expression.");
     }
 
-    std::unique_ptr<InterpreterValue> result = resultExpr->eval(globalContext);
+    auto interpreter = std::unique_ptr<Interpreter>();
+    std::unique_ptr<InterpreterValue> result = interpreter->eval(*resultExpr, globalContext);
 
     if (result) {
         if (dynamic_cast<InterpreterValueLong*>(result.get()) || dynamic_cast<InterpreterValueBool*>(result.get())) {

@@ -1,4 +1,4 @@
-#include "interpreter.cpp"
+#include "interpreter.hpp"
 #include "tests.hpp"
 
 // This helper function checks if the evaluation was successful and returns the
@@ -120,7 +120,8 @@ std::unique_ptr<InterpreterValue> evaluateExpression(std::unique_ptr<AstExpr> ex
     context.addFunction(std::move(factorialFunc));
 
     
-    return expr->eval(context);
+    auto interpreter = std::unique_ptr<Interpreter>();
+    return interpreter->eval(*expr, context);
 }
 
 TEST_CASE(ConstantEvaluation) {
