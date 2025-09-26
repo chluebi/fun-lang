@@ -11,7 +11,7 @@ long AstExprConstLong::getValue() const { return Value; }
 std::unique_ptr<AstExpr> AstExprConstLong::clone() const {
     return std::make_unique<AstExprConstLong>(Location, Value);
 }
-std::unique_ptr<InterpreterValue> AstExprConstLong::accept(AstValueVisitor& visitor) const {
+std::unique_ptr<InterpreterValue> AstExprConstLong::accept(const AstValueVisitor& visitor) const {
     return visitor.visit(*this);
 }
 
@@ -20,7 +20,7 @@ bool AstExprConstBool::getValue() const { return Value; }
 std::unique_ptr<AstExpr> AstExprConstBool::clone() const {
     return std::make_unique<AstExprConstBool>(Location, Value);
 }
-std::unique_ptr<InterpreterValue> AstExprConstBool::accept(AstValueVisitor& visitor) const {
+std::unique_ptr<InterpreterValue> AstExprConstBool::accept(const AstValueVisitor& visitor) const {
     return visitor.visit(*this);
 }
 
@@ -60,7 +60,7 @@ const std::string& AstExprVariable::getName() const { return Name; }
 std::unique_ptr<AstExpr> AstExprVariable::clone() const {
     return std::make_unique<AstExprVariable>(Location, Name);
 }
-std::unique_ptr<InterpreterValue> AstExprVariable::accept(AstValueVisitor& visitor) const {
+std::unique_ptr<InterpreterValue> AstExprVariable::accept(const AstValueVisitor& visitor) const {
     return visitor.visit(*this);
 }
 
@@ -75,7 +75,7 @@ std::unique_ptr<AstExpr> AstExprCall::clone() const {
     }
     return std::make_unique<AstExprCall>(Location, Callee, std::move(clonedArgs));
 }
-std::unique_ptr<InterpreterValue> AstExprCall::accept(AstValueVisitor& visitor) const {
+std::unique_ptr<InterpreterValue> AstExprCall::accept(const AstValueVisitor& visitor) const {
     return visitor.visit(*this);
 }
 
@@ -90,7 +90,7 @@ const AstExpr* AstExprLetIn::getBody() const { return Body.get(); }
 std::unique_ptr<AstExpr> AstExprLetIn::clone() const {
     return std::make_unique<AstExprLetIn>(Location, Variable, Expr->clone(), Body->clone());
 }
-std::unique_ptr<InterpreterValue> AstExprLetIn::accept(AstValueVisitor& visitor) const {
+std::unique_ptr<InterpreterValue> AstExprLetIn::accept(const AstValueVisitor& visitor) const {
     return visitor.visit(*this);
 }
 
@@ -108,7 +108,7 @@ std::unique_ptr<AstExpr> AstExprBinaryIntToInt<OpKind>::clone() const {
     return std::make_unique<AstExprBinaryIntToInt<OpKind>>(Location, LHS->clone(), RHS->clone());
 }
 template <BinaryOpKindIntToInt OpKind>
-std::unique_ptr<InterpreterValue> AstExprBinaryIntToInt<OpKind>::accept(AstValueVisitor& visitor) const {
+std::unique_ptr<InterpreterValue> AstExprBinaryIntToInt<OpKind>::accept(const AstValueVisitor& visitor) const {
     return visitor.visit(*this);
 }
 template class AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>;
@@ -130,7 +130,7 @@ std::unique_ptr<AstExpr> AstExprBinaryIntToBool<OpKind>::clone() const {
     return std::make_unique<AstExprBinaryIntToBool<OpKind>>(Location, LHS->clone(), RHS->clone());
 }
 template <BinaryOpKindIntToBool OpKind>
-std::unique_ptr<InterpreterValue> AstExprBinaryIntToBool<OpKind>::accept(AstValueVisitor& visitor) const {
+std::unique_ptr<InterpreterValue> AstExprBinaryIntToBool<OpKind>::accept(const AstValueVisitor& visitor) const {
     return visitor.visit(*this);
 }
 template class AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>;
@@ -154,7 +154,7 @@ std::unique_ptr<AstExpr> AstExprBinaryBoolToBool<OpKind>::clone() const {
     return std::make_unique<AstExprBinaryBoolToBool<OpKind>>(Location, LHS->clone(), RHS->clone());
 }
 template <BinaryOpKindBoolToBool OpKind>
-std::unique_ptr<InterpreterValue> AstExprBinaryBoolToBool<OpKind>::accept(AstValueVisitor& visitor) const {
+std::unique_ptr<InterpreterValue> AstExprBinaryBoolToBool<OpKind>::accept(const AstValueVisitor& visitor) const {
     return visitor.visit(*this);
 }
 template class AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>;
@@ -181,6 +181,6 @@ std::unique_ptr<AstExpr> AstExprMatch::clone() const {
     }
     return std::make_unique<AstExprMatch>(Location, std::move(clonedPaths));
 }
-std::unique_ptr<InterpreterValue> AstExprMatch::accept(AstValueVisitor& visitor) const {
+std::unique_ptr<InterpreterValue> AstExprMatch::accept(const AstValueVisitor& visitor) const {
     return visitor.visit(*this);
 }

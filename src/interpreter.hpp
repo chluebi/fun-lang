@@ -43,6 +43,27 @@ public:
     void addFunction(std::unique_ptr<AstFunction> func);
     std::unique_ptr<Context> cloneFunctionContext() const;
     std::unique_ptr<Context> clone() const;
+
+    void debugPrint() const {
+        std::cout << "--- Context Debug Print ---" << std::endl;
+
+        // Print Variables
+        std::cout << "Variables (" << variables.size() << "):" << std::endl;
+        for (const auto& pair : variables) {
+            // Assume InterpreterValue has a 'toString()' or similar debug method
+            // or you implement a way to print its value.
+            std::cout << "  - Name: '" << pair.first << "', Value: [Value details here]" << std::endl;
+        }
+        
+        // Print Functions
+        std::cout << "Functions (" << functions.size() << "):" << std::endl;
+        for (const auto& pair : functions) {
+            // Assume AstFunction has a 'getName()' or similar debug method
+            std::cout << "  - Name: '" << pair.first << "', Function: [Function details here]" << std::endl;
+        }
+
+        std::cout << "--- End Context Debug Print ---" << std::endl;
+    }
 };
 
 
@@ -55,29 +76,30 @@ private:
     friend class ContextGuard;
 
 public:
-    std::unique_ptr<InterpreterValue> eval(const AstExpr& expr, const Context& context) const;
+    Interpreter(const Context& initialContext);
+    std::unique_ptr<InterpreterValue> eval(const AstExpr& expr) const;
 private:
-    std::unique_ptr<InterpreterValue> visit(const AstExprConstLong& expr) override;
-    std::unique_ptr<InterpreterValue> visit(const AstExprConstBool& expr) override;
-    std::unique_ptr<InterpreterValue> visit(const AstExprVariable& expr) override;
-    std::unique_ptr<InterpreterValue> visit(const AstExprCall& expr) override;
-    std::unique_ptr<InterpreterValue> visit(const AstExprLetIn& expr) override;
-    std::unique_ptr<InterpreterValue> visit(const AstExprMatch& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprConstLong& expr) const override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprConstBool& expr) const override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprVariable& expr) const override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprCall& expr) const override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprLetIn& expr) const override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprMatch& expr) const override;
 
-    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>& expr) override;
-    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>& expr) override;
-    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>& expr) override;
-    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Div>& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>& expr) const override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>& expr) const override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>& expr) const override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Div>& expr) const override;
 
-    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>& expr) override;
-    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Neq>& expr) override;
-    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Leq>& expr) override;
-    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Lt>& expr) override;
-    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Geq>& expr) override;
-    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>& expr) const override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Neq>& expr) const override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Leq>& expr) const override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Lt>& expr) const override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Geq>& expr) const override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>& expr) const override;
 
-    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>& expr) override;
-    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>& expr) const override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>& expr) const override;
 
     std::unique_ptr<InterpreterValue> evalBinaryIntToInt(
         const AstExpr& lhs, const AstExpr& rhs, BinaryOpKindIntToInt op) const;

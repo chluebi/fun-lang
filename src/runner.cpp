@@ -99,8 +99,8 @@ std::unique_ptr<InterpreterValue> runFile(char file[]) {
         throw ParserException("Parsing failed for the main expression.", parser.get().Location);
     }
     
-    Interpreter interpreter;
-    std::unique_ptr<InterpreterValue> result = interpreter.eval(*resultExpr, globalContext);
+    Interpreter interpreter = Interpreter(globalContext);
+    std::unique_ptr<InterpreterValue> result = interpreter.eval(*resultExpr);
 
     if (result) {
         if (dynamic_cast<InterpreterValueLong*>(result.get()) || dynamic_cast<InterpreterValueBool*>(result.get())) {
