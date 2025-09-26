@@ -12,6 +12,65 @@
 class InterpreterValue;
 class Context;
 
+enum class BinaryOpKindIntToInt {
+    Add, Sub, Mul, Div,
+};
+
+enum class BinaryOpKindIntToBool {
+    Eq, Neq, Leq, Lt, Geq, Gt
+};
+
+enum class BinaryOpKindBoolToBool {
+    And, Or
+};
+
+// --- Visitor Interface Definition ---
+class AstExpr;
+class AstExprConstLong;
+class AstExprConstBool;
+class AstExprVariable;
+class AstExprCall;
+class AstExprLetIn;
+class AstExprMatch;
+
+enum class BinaryOpKindIntToInt;
+template <BinaryOpKindIntToInt OpKind> class AstExprBinaryIntToInt;
+
+enum class BinaryOpKindIntToBool;
+template <BinaryOpKindIntToBool OpKind> class AstExprBinaryIntToBool;
+
+enum class BinaryOpKindBoolToBool;
+template <BinaryOpKindBoolToBool OpKind> class AstExprBinaryBoolToBool;
+
+class AstExprMatchPath;
+
+class AstVisitor {
+public:
+    virtual ~AstVisitor() = default;
+
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprConstLong& expr) = 0;
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprConstBool& expr) = 0;
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprVariable& expr) = 0;
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprCall& expr) = 0;
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprLetIn& expr) = 0;
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprMatch& expr) = 0;
+
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>& expr) = 0;
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>& expr) = 0;
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>& expr) = 0;
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Div>& expr) = 0;
+
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>& expr) = 0;
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Neq>& expr) = 0;
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Leq>& expr) = 0;
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Lt>& expr) = 0;
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Geq>& expr) = 0;
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>& expr) = 0;
+
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>& expr) = 0;
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>& expr) = 0;
+};
+
 class AstExpr {
 protected:
     SourceLocation Location;
@@ -20,6 +79,8 @@ public:
     virtual ~AstExpr() = default;
     virtual std::unique_ptr<AstExpr> clone() const = 0;
     const SourceLocation& getLocation() const;
+
+    virtual std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const = 0;
 };
 
 class AstExprConst : public AstExpr {
@@ -33,6 +94,8 @@ public:
     AstExprConstLong(const SourceLocation &loc, const long &Value);
     long getValue() const;
     std::unique_ptr<AstExpr> clone() const override;
+
+    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
 };
 
 class AstExprConstBool : public AstExprConst {
@@ -41,6 +104,8 @@ public:
     AstExprConstBool(const SourceLocation &loc, const bool &Value);
     bool getValue() const;
     std::unique_ptr<AstExpr> clone() const override;
+
+    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
 };
 
 struct AstArg {
@@ -78,6 +143,8 @@ public:
     AstExprVariable(const SourceLocation &loc, const std::string &Name);
     const std::string& getName() const;
     std::unique_ptr<AstExpr> clone() const override;
+
+    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
 };
 
 class AstExprCall : public AstExpr {
@@ -89,6 +156,8 @@ public:
     const std::string& getCallee() const;
     const std::vector<std::unique_ptr<AstExpr>>& getArgs() const;
     std::unique_ptr<AstExpr> clone() const override;
+
+    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
 };
 
 class AstExprLetIn : public AstExpr {
@@ -104,11 +173,11 @@ public:
     const AstExpr* getExpr() const;
     const AstExpr* getBody() const;
     std::unique_ptr<AstExpr> clone() const override;
+
+    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
 };
 
-enum class BinaryOpKindIntToInt {
-    Add, Sub, Mul, Div,
-};
+
 
 template <BinaryOpKindIntToInt OpKind>
 class AstExprBinaryIntToInt : public AstExpr {
@@ -120,6 +189,8 @@ public:
     const AstExpr* getLHS() const;
     const AstExpr* getRHS() const;
     std::unique_ptr<AstExpr> clone() const override;
+
+    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
 };
 
 extern template class AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>;
@@ -127,9 +198,7 @@ extern template class AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>;
 extern template class AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>;
 extern template class AstExprBinaryIntToInt<BinaryOpKindIntToInt::Div>;
 
-enum class BinaryOpKindIntToBool {
-    Eq, Neq, Leq, Lt, Geq, Gt
-};
+
 
 template <BinaryOpKindIntToBool OpKind>
 class AstExprBinaryIntToBool : public AstExpr {
@@ -141,6 +210,8 @@ public:
     const AstExpr* getLHS() const;
     const AstExpr* getRHS() const;
     std::unique_ptr<AstExpr> clone() const override;
+
+    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
 };
 
 extern template class AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>;
@@ -150,9 +221,7 @@ extern template class AstExprBinaryIntToBool<BinaryOpKindIntToBool::Lt>;
 extern template class AstExprBinaryIntToBool<BinaryOpKindIntToBool::Geq>;
 extern template class AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>;
 
-enum class BinaryOpKindBoolToBool {
-    And, Or
-};
+
 
 template <BinaryOpKindBoolToBool OpKind>
 class AstExprBinaryBoolToBool : public AstExpr {
@@ -164,6 +233,8 @@ public:
     const AstExpr* getLHS() const;
     const AstExpr* getRHS() const;
     std::unique_ptr<AstExpr> clone() const override;
+
+    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
 };
 
 extern template class AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>;
@@ -189,6 +260,8 @@ public:
     AstExprMatch(const SourceLocation &loc, std::vector<std::unique_ptr<AstExprMatchPath>> Paths);
     const std::vector<std::unique_ptr<AstExprMatchPath>>& getPaths() const;
     std::unique_ptr<AstExpr> clone() const override;
+
+    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
 };
 
 #endif

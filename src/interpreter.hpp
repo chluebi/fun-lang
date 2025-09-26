@@ -44,19 +44,42 @@ public:
     std::unique_ptr<Context> clone() const;
 };
 
-class Interpreter {
+class Interpreter : public AstVisitor { // Inherit from AstVisitor
+private:
+    const Context* CurrentContext = nullptr;
 public:
     std::unique_ptr<InterpreterValue> eval(const AstExpr& expr, const Context& context) const;
 private:
+    std::unique_ptr<InterpreterValue> visit(const AstExprConstLong& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprConstBool& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprVariable& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprCall& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprLetIn& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprMatch& expr) override;
+
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Div>& expr) override;
+
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Neq>& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Leq>& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Lt>& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Geq>& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>& expr) override;
+
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>& expr) override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>& expr) override;
+
     std::unique_ptr<InterpreterValue> evalBinaryIntToInt(
-        const AstExpr& lhs, const AstExpr& rhs, const Context& context,
-        BinaryOpKindIntToInt op) const;
+        const AstExpr& lhs, const AstExpr& rhs, BinaryOpKindIntToInt op) const;
     std::unique_ptr<InterpreterValue> evalBinaryIntToBool(
-        const AstExpr& lhs, const AstExpr& rhs, const Context& context,
-        BinaryOpKindIntToBool op) const;
+        const AstExpr& lhs, const AstExpr& rhs, BinaryOpKindIntToBool op) const;
     std::unique_ptr<InterpreterValue> evalBinaryBoolToBool(
-        const AstExpr& lhs, const AstExpr& rhs, const Context& context,
-        BinaryOpKindBoolToBool op) const;
+        const AstExpr& lhs, const AstExpr& rhs, BinaryOpKindBoolToBool op) const;
+
+    std::unique_ptr<InterpreterValue> runWithContext(const AstExpr& expr, const Context& newContext) const;
 };
 
 #endif
