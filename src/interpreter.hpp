@@ -44,7 +44,7 @@ public:
     std::unique_ptr<Context> clone() const;
 };
 
-class Interpreter : public AstVisitor { // Inherit from AstVisitor
+class Interpreter : public AstValueVisitor { // Inherit from AstValueVisitor
 private:
     const Context* CurrentContext = nullptr;
 public:

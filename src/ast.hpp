@@ -44,9 +44,9 @@ template <BinaryOpKindBoolToBool OpKind> class AstExprBinaryBoolToBool;
 
 class AstExprMatchPath;
 
-class AstVisitor {
+class AstValueVisitor {
 public:
-    virtual ~AstVisitor() = default;
+    virtual ~AstValueVisitor() = default;
 
     virtual std::unique_ptr<InterpreterValue> visit(const AstExprConstLong& expr) = 0;
     virtual std::unique_ptr<InterpreterValue> visit(const AstExprConstBool& expr) = 0;
@@ -80,7 +80,7 @@ public:
     virtual std::unique_ptr<AstExpr> clone() const = 0;
     const SourceLocation& getLocation() const;
 
-    virtual std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const = 0;
+    virtual std::unique_ptr<InterpreterValue> accept(AstValueVisitor& visitor) const = 0;
 };
 
 class AstExprConst : public AstExpr {
@@ -95,7 +95,7 @@ public:
     long getValue() const;
     std::unique_ptr<AstExpr> clone() const override;
 
-    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
+    std::unique_ptr<InterpreterValue> accept(AstValueVisitor& visitor) const override;
 };
 
 class AstExprConstBool : public AstExprConst {
@@ -105,7 +105,7 @@ public:
     bool getValue() const;
     std::unique_ptr<AstExpr> clone() const override;
 
-    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
+    std::unique_ptr<InterpreterValue> accept(AstValueVisitor& visitor) const override;
 };
 
 struct AstArg {
@@ -144,7 +144,7 @@ public:
     const std::string& getName() const;
     std::unique_ptr<AstExpr> clone() const override;
 
-    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
+    std::unique_ptr<InterpreterValue> accept(AstValueVisitor& visitor) const override;
 };
 
 class AstExprCall : public AstExpr {
@@ -157,7 +157,7 @@ public:
     const std::vector<std::unique_ptr<AstExpr>>& getArgs() const;
     std::unique_ptr<AstExpr> clone() const override;
 
-    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
+    std::unique_ptr<InterpreterValue> accept(AstValueVisitor& visitor) const override;
 };
 
 class AstExprLetIn : public AstExpr {
@@ -174,7 +174,7 @@ public:
     const AstExpr* getBody() const;
     std::unique_ptr<AstExpr> clone() const override;
 
-    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
+    std::unique_ptr<InterpreterValue> accept(AstValueVisitor& visitor) const override;
 };
 
 
@@ -190,7 +190,7 @@ public:
     const AstExpr* getRHS() const;
     std::unique_ptr<AstExpr> clone() const override;
 
-    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
+    std::unique_ptr<InterpreterValue> accept(AstValueVisitor& visitor) const override;
 };
 
 extern template class AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>;
@@ -211,7 +211,7 @@ public:
     const AstExpr* getRHS() const;
     std::unique_ptr<AstExpr> clone() const override;
 
-    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
+    std::unique_ptr<InterpreterValue> accept(AstValueVisitor& visitor) const override;
 };
 
 extern template class AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>;
@@ -234,7 +234,7 @@ public:
     const AstExpr* getRHS() const;
     std::unique_ptr<AstExpr> clone() const override;
 
-    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
+    std::unique_ptr<InterpreterValue> accept(AstValueVisitor& visitor) const override;
 };
 
 extern template class AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>;
@@ -261,7 +261,7 @@ public:
     const std::vector<std::unique_ptr<AstExprMatchPath>>& getPaths() const;
     std::unique_ptr<AstExpr> clone() const override;
 
-    std::unique_ptr<InterpreterValue> accept(AstVisitor& visitor) const override;
+    std::unique_ptr<InterpreterValue> accept(AstValueVisitor& visitor) const override;
 };
 
 #endif
