@@ -7,6 +7,7 @@
 #include <vector>
 #include <unordered_map>
 #include <optional>
+
 #include "ast.hpp"
 
 class InterpreterValue {
@@ -44,9 +45,15 @@ public:
     std::unique_ptr<Context> clone() const;
 };
 
-class Interpreter : public AstValueVisitor { // Inherit from AstValueVisitor
+
+class Interpreter : public AstValueVisitor {
 private:
-    const Context* CurrentContext = nullptr;
+    // Mark as mutable to allow modification in const methods
+    mutable const Context* CurrentContext = nullptr;
+    
+    // Allow ContextGuard to access private member CurrentContext
+    friend class ContextGuard;
+
 public:
     std::unique_ptr<InterpreterValue> eval(const AstExpr& expr, const Context& context) const;
 private:
@@ -80,6 +87,23 @@ private:
         const AstExpr& lhs, const AstExpr& rhs, BinaryOpKindBoolToBool op) const;
 
     std::unique_ptr<InterpreterValue> runWithContext(const AstExpr& expr, const Context& newContext) const;
+};
+
+// RAII helper to save and restore the interpreter's context pointer.
+class ContextGuard {
+private:
+    Interpreter* CurrentInterpreter; 
+    const Context* SavedContext;
+public:
+    ContextGuard(Interpreter* interpreter, const Context* newContext)
+        : CurrentInterpreter(interpreter), SavedContext(interpreter->CurrentContext) 
+    {
+        CurrentInterpreter->CurrentContext = newContext; 
+    }
+
+    ~ContextGuard() {
+        CurrentInterpreter->CurrentContext = SavedContext; 
+    }
 };
 
 #endif

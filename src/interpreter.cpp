@@ -59,10 +59,17 @@ std::unique_ptr<Context> Context::clone() const {
 }
 
 std::unique_ptr<InterpreterValue> Interpreter::runWithContext(const AstExpr& expr, const Context& newContext) const {
-    // Cast away constness to modify the internal context pointer,
-    // as it's a private mutable state of the interpreter for threading the context.
-    const_cast<Interpreter*>(this)->CurrentContext = &newContext;
-    auto result = expr.accept(const_cast<Interpreter&>(*this));
+    
+    // We only need const_cast once to get a non-const pointer to 'this'.
+    Interpreter* nonConstThis = const_cast<Interpreter*>(this);
+
+    // ContextGuard saves the old 'CurrentContext' and sets the new one.
+    // The old context will be restored when 'guard' goes out of scope.
+    ContextGuard guard(nonConstThis, &newContext); 
+
+    auto result = expr.accept(*nonConstThis);
+    
+    // The context is restored automatically when 'guard' is destroyed here.
     return result;
 }
 
