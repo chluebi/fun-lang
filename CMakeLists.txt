@@ -30,9 +30,18 @@ target_link_libraries(interpreter_tests PRIVATE LLVM)
 
 
 # Interpreter executable
-add_executable(interpreter src/runner.cpp src/parser.cpp src/lexer.cpp src/interpreter.cpp src/runner.cpp src/source_location.cpp src/ast.cpp src/codegen.cpp)
+add_executable(interpreter src/interpreter_main.cpp src/parser.cpp src/lexer.cpp src/interpreter.cpp src/runner.cpp src/source_location.cpp src/ast.cpp src/codegen.cpp)
 target_compile_options(interpreter PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
     $<$<CXX_COMPILER_ID:MSVC>:/W4>
 )
 target_link_libraries(interpreter PRIVATE LLVM)
+
+
+# Compiler executable
+add_executable(compiler src/compiler.cpp src/parser.cpp src/lexer.cpp src/interpreter.cpp src/runner.cpp src/source_location.cpp src/ast.cpp src/codegen.cpp)
+target_compile_options(compiler PRIVATE
+    $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
+    $<$<CXX_COMPILER_ID:MSVC>:/W4>
+)
+target_link_libraries(compiler PRIVATE LLVM)
