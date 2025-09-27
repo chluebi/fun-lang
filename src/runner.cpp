@@ -112,3 +112,58 @@ std::unique_ptr<InterpreterValue> runFile(char file[]) {
         throw InterpreterException("Interpreter::eval returned null unexpectedly.", resultExpr->getLocation());
     }
 }
+
+
+int runFileAndPrint(char file[]) {
+    try {
+        std::unique_ptr<InterpreterValue> result = runFile(file);
+        if (result) {
+            if (auto longResult = dynamic_cast<InterpreterValueLong*>(result.get())) {
+                std::cout << "Execution result: " << longResult->getValue() << std::endl;
+            } else if (auto boolResult = dynamic_cast<InterpreterValueBool*>(result.get())) {
+                std::cout << "Execution result: " << (boolResult->getValue() ? "true" : "false") << std::endl;
+            }
+        }
+    } catch (const LexerException& e) {
+        std::cerr << "Lexer Error: " << e.what() << std::endl;
+        try {
+            std::string sourceCode = readFile(file);
+            printAffectedCode(sourceCode, e.Location, file);
+        } catch (const std::exception& fileE) {
+            std::cerr << "Could not read file for error display: " << fileE.what() << std::endl;
+        }
+        return 1;
+    } catch (const ParserException& e) {
+        std::cerr << "Parser Error: " << e.what() << std::endl;
+        try {
+            std::string sourceCode = readFile(file);
+            printAffectedCode(sourceCode, e.Location, file);
+        } catch (const std::exception& fileE) {
+            std::cerr << "Could not read file for error display: " << fileE.what() << std::endl;
+        }
+        return 1;
+    } catch (const InterpreterException& e) {
+        std::cerr << "Runtime Error: " << e.what() << std::endl;
+        try {
+            std::string sourceCode = readFile(file);
+            printAffectedCode(sourceCode, e.Location, file);
+        } catch (const std::exception& fileE) {
+            std::cerr << "Could not read file for error display: " << fileE.what() << std::endl;
+        }
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << "Fatal Error: " << e.what() << std::endl;
+        return 1;
+    }
+    
+    return 0;
+}
+
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        std::cerr << "Usage: " << argv[0] << " <filename>" << std::endl;
+        return 1;
+    }
+
+    return runFileAndPrint(argv[1]);
+}
