@@ -61,9 +61,6 @@ std::unique_ptr<Context> Context::clone() const {
 Interpreter::Interpreter(const Context& initialContext) : CurrentContext(&initialContext) {}
 
 std::unique_ptr<InterpreterValue> Interpreter::runWithContext(const AstExpr& expr, const Context& newContext) const {
-
-    std::cout << "running with context" << std::endl;
-    newContext.debugPrint();
     
     // We only need const_cast once to get a non-const pointer to 'this'.
     Interpreter* nonConstThis = const_cast<Interpreter*>(this);

@@ -1,5 +1,6 @@
 #include "ast.hpp"
 #include "interpreter.hpp"
+#include "codegen.hpp"
 
 AstExpr::AstExpr(const SourceLocation& loc) : Location(loc) {}
 const SourceLocation& AstExpr::getLocation() const { return Location; }

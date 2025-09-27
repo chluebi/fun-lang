@@ -6,6 +6,9 @@
 #include <vector>
 #include <unordered_map>
 #include <utility>
+
+#include "llvm/IR/Value.h"
+
 #include "source_location.hpp"
 
 // Forward declarations
@@ -70,6 +73,34 @@ public:
     virtual std::unique_ptr<InterpreterValue> visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>& expr) const = 0;
     virtual std::unique_ptr<InterpreterValue> visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>& expr) const = 0;
 };
+
+class AstLLVMValueVisitor {
+public:
+    virtual ~AstLLVMValueVisitor() = default;
+
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprConstLong& expr) const = 0;
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprConstBool& expr) const = 0;
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprVariable& expr) const = 0;
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprCall& expr) const = 0;
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprLetIn& expr) const = 0;
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprMatch& expr) const = 0;
+
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>& expr) const = 0;
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>& expr) const = 0;
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>& expr) const = 0;
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Div>& expr) const = 0;
+
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>& expr) const = 0;
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Neq>& expr) const = 0;
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Leq>& expr) const = 0;
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Lt>& expr) const = 0;
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Geq>& expr) const = 0;
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>& expr) const = 0;
+
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>& expr) const = 0;
+    virtual std::unique_ptr<llvm::Value *> visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>& expr) const = 0;
+};
+
 
 class AstExpr {
 protected:
