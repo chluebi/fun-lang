@@ -15,6 +15,10 @@ std::unique_ptr<AstExpr> AstExprConstLong::clone() const {
 std::unique_ptr<InterpreterValue> AstExprConstLong::accept(const AstValueVisitor& visitor) const {
     return visitor.visit(*this);
 }
+llvm::Value *AstExprConstLong::accept(const AstLLVMValueVisitor& visitor) const {
+    return visitor.visit(*this);
+}
+
 
 AstExprConstBool::AstExprConstBool(const SourceLocation &loc, const bool &Value) : AstExprConst(loc), Value(Value) {}
 bool AstExprConstBool::getValue() const { return Value; }
@@ -22,6 +26,9 @@ std::unique_ptr<AstExpr> AstExprConstBool::clone() const {
     return std::make_unique<AstExprConstBool>(Location, Value);
 }
 std::unique_ptr<InterpreterValue> AstExprConstBool::accept(const AstValueVisitor& visitor) const {
+    return visitor.visit(*this);
+}
+llvm::Value *AstExprConstBool::accept(const AstLLVMValueVisitor& visitor) const {
     return visitor.visit(*this);
 }
 
@@ -64,6 +71,9 @@ std::unique_ptr<AstExpr> AstExprVariable::clone() const {
 std::unique_ptr<InterpreterValue> AstExprVariable::accept(const AstValueVisitor& visitor) const {
     return visitor.visit(*this);
 }
+llvm::Value *AstExprVariable::accept(const AstLLVMValueVisitor& visitor) const {
+    return visitor.visit(*this);
+}
 
 AstExprCall::AstExprCall(const SourceLocation &loc, const std::string &Callee,
             std::vector<std::unique_ptr<AstExpr>> Args) : AstExpr(loc), Callee(Callee), Args(std::move(Args)) {}
@@ -79,6 +89,9 @@ std::unique_ptr<AstExpr> AstExprCall::clone() const {
 std::unique_ptr<InterpreterValue> AstExprCall::accept(const AstValueVisitor& visitor) const {
     return visitor.visit(*this);
 }
+llvm::Value *AstExprCall::accept(const AstLLVMValueVisitor& visitor) const {
+    return visitor.visit(*this);
+}
 
 AstExprLetIn::AstExprLetIn(const SourceLocation &loc,
             const std::string &Variable,
@@ -92,6 +105,9 @@ std::unique_ptr<AstExpr> AstExprLetIn::clone() const {
     return std::make_unique<AstExprLetIn>(Location, Variable, Expr->clone(), Body->clone());
 }
 std::unique_ptr<InterpreterValue> AstExprLetIn::accept(const AstValueVisitor& visitor) const {
+    return visitor.visit(*this);
+}
+llvm::Value *AstExprLetIn::accept(const AstLLVMValueVisitor& visitor) const {
     return visitor.visit(*this);
 }
 
@@ -112,6 +128,11 @@ template <BinaryOpKindIntToInt OpKind>
 std::unique_ptr<InterpreterValue> AstExprBinaryIntToInt<OpKind>::accept(const AstValueVisitor& visitor) const {
     return visitor.visit(*this);
 }
+template <BinaryOpKindIntToInt OpKind>
+llvm::Value *AstExprBinaryIntToInt<OpKind>::accept(const AstLLVMValueVisitor& visitor) const {
+    return visitor.visit(*this);
+}
+
 template class AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>;
 template class AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>;
 template class AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>;
@@ -134,6 +155,11 @@ template <BinaryOpKindIntToBool OpKind>
 std::unique_ptr<InterpreterValue> AstExprBinaryIntToBool<OpKind>::accept(const AstValueVisitor& visitor) const {
     return visitor.visit(*this);
 }
+template <BinaryOpKindIntToBool OpKind>
+llvm::Value *AstExprBinaryIntToBool<OpKind>::accept(const AstLLVMValueVisitor& visitor) const {
+    return visitor.visit(*this);
+}
+
 template class AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>;
 template class AstExprBinaryIntToBool<BinaryOpKindIntToBool::Neq>;
 template class AstExprBinaryIntToBool<BinaryOpKindIntToBool::Leq>;
@@ -158,6 +184,11 @@ template <BinaryOpKindBoolToBool OpKind>
 std::unique_ptr<InterpreterValue> AstExprBinaryBoolToBool<OpKind>::accept(const AstValueVisitor& visitor) const {
     return visitor.visit(*this);
 }
+template <BinaryOpKindBoolToBool OpKind>
+llvm::Value *AstExprBinaryBoolToBool<OpKind>::accept(const AstLLVMValueVisitor& visitor) const {
+    return visitor.visit(*this);
+}
+
 template class AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>;
 template class AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>;
 
@@ -183,5 +214,8 @@ std::unique_ptr<AstExpr> AstExprMatch::clone() const {
     return std::make_unique<AstExprMatch>(Location, std::move(clonedPaths));
 }
 std::unique_ptr<InterpreterValue> AstExprMatch::accept(const AstValueVisitor& visitor) const {
+    return visitor.visit(*this);
+}
+llvm::Value *AstExprMatch::accept(const AstLLVMValueVisitor& visitor) const {
     return visitor.visit(*this);
 }

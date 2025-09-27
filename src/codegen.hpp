@@ -24,7 +24,7 @@ class CodeGenerator {
     std::unique_ptr<llvm::IRBuilder<>> Builder;
     std::map<std::string, llvm::Value *> NamedValues;
 public:
-    std::unique_ptr<llvm::Value *> codegenExpr(const AstExpr& expr) const;
+    llvm::Value *codegenExpr(const AstExpr& expr) const;
 };
 
 
