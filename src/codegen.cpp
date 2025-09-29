@@ -104,7 +104,66 @@ llvm::Value *CodeGenerator::visit(const AstExprLetIn& expr, CodegenContext& ctx)
 }
 
 llvm::Value *CodeGenerator::visit(const AstExprMatch& expr, CodegenContext& ctx) const {
-    throw CodegenException("AstExprMatch codegen not implemented", expr.getLocation());
+    llvm::Function *TheFunction = Builder->GetInsertBlock()->getParent();
+
+    llvm::BasicBlock *EntryBB = Builder->GetInsertBlock();
+    
+    llvm::BasicBlock *MergeBB = llvm::BasicBlock::Create(*TheContext, "match.merge", TheFunction);
+    llvm::BasicBlock *NoMatchBB = llvm::BasicBlock::Create(*TheContext, "no_match");
+    llvm::BasicBlock *CurrentCondBB = llvm::BasicBlock::Create(*TheContext, "match.cond", TheFunction);
+
+    Builder->SetInsertPoint(EntryBB);
+    Builder->CreateBr(CurrentCondBB);
+    
+    Builder->SetInsertPoint(CurrentCondBB);
+
+    std::vector<std::pair<llvm::Value*, llvm::BasicBlock*>> incomingValues;
+    
+    for (size_t i = 0; i < expr.getPaths().size(); ++i) {
+        const auto& path = expr.getPaths()[i];
+
+        llvm::Value *GuardVal = this->codegen(*path->getGuard(), ctx);
+        if (!GuardVal)
+            return nullptr;
+
+        llvm::BasicBlock *ThenBB = llvm::BasicBlock::Create(*TheContext, "match.then", TheFunction);
+
+        llvm::BasicBlock *NextCondBB = nullptr;
+        if (i == expr.getPaths().size() - 1) {
+            Builder->CreateCondBr(GuardVal, ThenBB, NoMatchBB);
+        } else {
+            NextCondBB = llvm::BasicBlock::Create(*TheContext, "match.else", TheFunction);
+            Builder->CreateCondBr(GuardVal, ThenBB, NextCondBB);
+        }
+
+        Builder->SetInsertPoint(ThenBB);
+        llvm::Value *ThenVal = this->codegen(*path->getBody(), ctx);
+        if (!ThenVal)
+            return nullptr;
+
+        incomingValues.push_back({ThenVal, ThenBB});
+        Builder->CreateBr(MergeBB);
+
+        CurrentCondBB = NextCondBB;
+        if (CurrentCondBB) {
+            Builder->SetInsertPoint(CurrentCondBB);
+        }
+    }
+
+    Builder->SetInsertPoint(NoMatchBB);
+    llvm::Type *RetType = incomingValues.front().first->getType();
+    llvm::Value *DefaultVal = llvm::Constant::getNullValue(RetType);
+    Builder->CreateRet(DefaultVal);
+
+    TheFunction->insert(TheFunction->end(), NoMatchBB);
+
+    Builder->SetInsertPoint(MergeBB);
+    llvm::PHINode *PN = Builder->CreatePHI(RetType, incomingValues.size(), "match.result");
+    for (const auto& pair : incomingValues) {
+        PN->addIncoming(pair.first, pair.second);
+    }
+    
+    return PN;
 }
 
 // --- Arithmetic Binary Operations (Int to Int) ---

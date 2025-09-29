@@ -1,9 +1,8 @@
 fn test(n) {
-    let k = (n + 1) - n
-    in
-    let a = k * k
-    in
-    a - 1
+    match {
+        n < 2 -> 1
+        true -> test(n-1) + test(n-2)
+    }
 }
 
 test(12)
