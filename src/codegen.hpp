@@ -18,38 +18,41 @@
 #include "ast.hpp"
 #include "codegen_exception.hpp"
 
+class CodegenContext {
+public:
+    std::map<std::string, llvm::Value *> NamedValues;
+};
 
-class CodeGenerator : AstLLVMValueVisitor {
+class CodeGenerator: AstLLVMValueVisitor {
 public:
     std::unique_ptr<llvm::LLVMContext> TheContext;
     std::unique_ptr<llvm::Module> TheModule;
     std::unique_ptr<llvm::IRBuilder<>> Builder;
-    std::map<std::string, llvm::Value *> NamedValues;
 public:
-    llvm::Value *codegen(const AstExpr& expr) const;
-    llvm::Value *codegen(const AstFunction& func);
+    llvm::Value *codegen(const AstExpr& expr, CodegenContext& ctx) const;
+    llvm::Value *codegen(const AstFunction& func, CodegenContext& ctx);
 private:
-    llvm::Value *visit(const AstExprConstLong& expr) const override;
-    llvm::Value *visit(const AstExprConstBool& expr) const override;
-    llvm::Value *visit(const AstExprVariable& expr) const override;
-    llvm::Value *visit(const AstExprCall& expr) const override;
-    llvm::Value *visit(const AstExprLetIn& expr) const override;
-    llvm::Value *visit(const AstExprMatch& expr) const override;
+    llvm::Value *visit(const AstExprConstLong& expr, CodegenContext& ctx) const override;
+    llvm::Value *visit(const AstExprConstBool& expr, CodegenContext& ctx) const override;
+    llvm::Value *visit(const AstExprVariable& expr, CodegenContext& ctx) const override;
+    llvm::Value *visit(const AstExprCall& expr, CodegenContext& ctx) const override;
+    llvm::Value *visit(const AstExprLetIn& expr, CodegenContext& ctx) const override;
+    llvm::Value *visit(const AstExprMatch& expr, CodegenContext& ctx) const override;
 
-    llvm::Value *visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>& expr) const override;
-    llvm::Value *visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>& expr) const override;
-    llvm::Value *visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>& expr) const override;
-    llvm::Value *visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Div>& expr) const override;
+    llvm::Value *visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>& expr, CodegenContext& ctx) const override;
+    llvm::Value *visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>& expr, CodegenContext& ctx) const override;
+    llvm::Value *visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>& expr, CodegenContext& ctx) const override;
+    llvm::Value *visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Div>& expr, CodegenContext& ctx) const override;
 
-    llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>& expr) const override;
-    llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Neq>& expr) const override;
-    llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Leq>& expr) const override;
-    llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Lt>& expr) const override;
-    llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Geq>& expr) const override;
-    llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>& expr) const override;
+    llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>& expr, CodegenContext& ctx) const override;
+    llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Neq>& expr, CodegenContext& ctx) const override;
+    llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Leq>& expr, CodegenContext& ctx) const override;
+    llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Lt>& expr, CodegenContext& ctx) const override;
+    llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Geq>& expr, CodegenContext& ctx) const override;
+    llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>& expr, CodegenContext& ctx) const override;
 
-    llvm::Value *visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>& expr) const override;
-    llvm::Value *visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>& expr) const override;
+    llvm::Value *visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>& expr, CodegenContext& ctx) const override;
+    llvm::Value *visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>& expr, CodegenContext& ctx) const override;
 };
 
 

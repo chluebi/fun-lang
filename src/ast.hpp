@@ -74,31 +74,33 @@ public:
     virtual std::unique_ptr<InterpreterValue> visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>& expr) const = 0;
 };
 
+class CodegenContext;
+
 class AstLLVMValueVisitor {
 public:
     virtual ~AstLLVMValueVisitor() = default;
 
-    virtual llvm::Value *visit(const AstExprConstLong& expr) const = 0;
-    virtual llvm::Value *visit(const AstExprConstBool& expr) const = 0;
-    virtual llvm::Value *visit(const AstExprVariable& expr) const = 0;
-    virtual llvm::Value *visit(const AstExprCall& expr) const = 0;
-    virtual llvm::Value *visit(const AstExprLetIn& expr) const = 0;
-    virtual llvm::Value *visit(const AstExprMatch& expr) const = 0;
+    virtual llvm::Value *visit(const AstExprConstLong& expr, CodegenContext& ctx) const = 0;
+    virtual llvm::Value *visit(const AstExprConstBool& expr, CodegenContext& ctx) const = 0;
+    virtual llvm::Value *visit(const AstExprVariable& expr, CodegenContext& ctx) const = 0;
+    virtual llvm::Value *visit(const AstExprCall& expr, CodegenContext& ctx) const = 0;
+    virtual llvm::Value *visit(const AstExprLetIn& expr, CodegenContext& ctx) const = 0;
+    virtual llvm::Value *visit(const AstExprMatch& expr, CodegenContext& ctx) const = 0;
 
-    virtual llvm::Value *visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>& expr) const = 0;
-    virtual llvm::Value *visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>& expr) const = 0;
-    virtual llvm::Value *visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>& expr) const = 0;
-    virtual llvm::Value *visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Div>& expr) const = 0;
+    virtual llvm::Value *visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>& expr, CodegenContext& ctx) const = 0;
+    virtual llvm::Value *visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>& expr, CodegenContext& ctx) const = 0;
+    virtual llvm::Value *visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>& expr, CodegenContext& ctx) const = 0;
+    virtual llvm::Value *visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Div>& expr, CodegenContext& ctx) const = 0;
 
-    virtual llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>& expr) const = 0;
-    virtual llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Neq>& expr) const = 0;
-    virtual llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Leq>& expr) const = 0;
-    virtual llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Lt>& expr) const = 0;
-    virtual llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Geq>& expr) const = 0;
-    virtual llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>& expr) const = 0;
+    virtual llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>& expr, CodegenContext& ctx) const = 0;
+    virtual llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Neq>& expr, CodegenContext& ctx) const = 0;
+    virtual llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Leq>& expr, CodegenContext& ctx) const = 0;
+    virtual llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Lt>& expr, CodegenContext& ctx) const = 0;
+    virtual llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Geq>& expr, CodegenContext& ctx) const = 0;
+    virtual llvm::Value *visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>& expr, CodegenContext& ctx) const = 0;
 
-    virtual llvm::Value *visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>& expr) const = 0;
-    virtual llvm::Value *visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>& expr) const = 0;
+    virtual llvm::Value *visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>& expr, CodegenContext& ctx) const = 0;
+    virtual llvm::Value *visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>& expr, CodegenContext& ctx) const = 0;
 };
 
 
@@ -112,7 +114,7 @@ public:
     const SourceLocation& getLocation() const;
 
     virtual std::unique_ptr<InterpreterValue> accept(const AstValueVisitor& visitor) const = 0;
-    virtual llvm::Value *accept(const AstLLVMValueVisitor& visitor) const = 0;
+    virtual llvm::Value *accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const = 0;
 };
 
 class AstExprConst : public AstExpr {
@@ -128,7 +130,7 @@ public:
     std::unique_ptr<AstExpr> clone() const override;
 
     std::unique_ptr<InterpreterValue> accept(const AstValueVisitor& visitor) const override;
-    llvm::Value *accept(const AstLLVMValueVisitor& visitor) const override;
+    llvm::Value *accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const override;
 };
 
 class AstExprConstBool : public AstExprConst {
@@ -139,7 +141,7 @@ public:
     std::unique_ptr<AstExpr> clone() const override;
 
     std::unique_ptr<InterpreterValue> accept(const AstValueVisitor& visitor) const override;
-    llvm::Value *accept(const AstLLVMValueVisitor& visitor) const override;
+    llvm::Value *accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const override;
 };
 
 struct AstArg {
@@ -179,7 +181,7 @@ public:
     std::unique_ptr<AstExpr> clone() const override;
 
     std::unique_ptr<InterpreterValue> accept(const AstValueVisitor& visitor) const override;
-    llvm::Value *accept(const AstLLVMValueVisitor& visitor) const override;
+    llvm::Value *accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const override;
 };
 
 class AstExprCall : public AstExpr {
@@ -193,7 +195,7 @@ public:
     std::unique_ptr<AstExpr> clone() const override;
 
     std::unique_ptr<InterpreterValue> accept(const AstValueVisitor& visitor) const override;
-    llvm::Value *accept(const AstLLVMValueVisitor& visitor) const override;
+    llvm::Value *accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const override;
 };
 
 class AstExprLetIn : public AstExpr {
@@ -211,7 +213,7 @@ public:
     std::unique_ptr<AstExpr> clone() const override;
 
     std::unique_ptr<InterpreterValue> accept(const AstValueVisitor& visitor) const override;
-    llvm::Value *accept(const AstLLVMValueVisitor& visitor) const override;
+    llvm::Value *accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const override;
 };
 
 
@@ -228,7 +230,7 @@ public:
     std::unique_ptr<AstExpr> clone() const override;
 
     std::unique_ptr<InterpreterValue> accept(const AstValueVisitor& visitor) const override;
-    llvm::Value *accept(const AstLLVMValueVisitor& visitor) const override;
+    llvm::Value *accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const override;
 };
 
 extern template class AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>;
@@ -250,7 +252,7 @@ public:
     std::unique_ptr<AstExpr> clone() const override;
 
     std::unique_ptr<InterpreterValue> accept(const AstValueVisitor& visitor) const override;
-    llvm::Value *accept(const AstLLVMValueVisitor& visitor) const override;
+    llvm::Value *accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const override;
 };
 
 extern template class AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>;
@@ -274,7 +276,7 @@ public:
     std::unique_ptr<AstExpr> clone() const override;
 
     std::unique_ptr<InterpreterValue> accept(const AstValueVisitor& visitor) const override;
-    llvm::Value *accept(const AstLLVMValueVisitor& visitor) const override;
+    llvm::Value *accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const override;
 };
 
 extern template class AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>;
@@ -302,7 +304,7 @@ public:
     std::unique_ptr<AstExpr> clone() const override;
 
     std::unique_ptr<InterpreterValue> accept(const AstValueVisitor& visitor) const override;
-    llvm::Value *accept(const AstLLVMValueVisitor& visitor) const override;
+    llvm::Value *accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const override;
 };
 
 #endif

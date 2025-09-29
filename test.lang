@@ -1,5 +1,9 @@
 fn test(n) {
-    1
+    let k = (n + 1) - n
+    in
+    let a = k * k
+    in
+    a - 1
 }
 
 test(12)

@@ -1,10 +1,10 @@
 #include "codegen.hpp"
 
-llvm::Value *CodeGenerator::codegen(const AstExpr& expr) const {
-    return expr.accept(*this);
+llvm::Value *CodeGenerator::codegen(const AstExpr& expr, CodegenContext& ctx) const {
+    return expr.accept(*this, ctx);
 }
 
-llvm::Value *CodeGenerator::codegen(const AstFunction& func) {
+llvm::Value *CodeGenerator::codegen(const AstFunction& func, CodegenContext& ctx) {
     llvm::Function *TheFunction = TheModule->getFunction(func.getPrototype()->getName());
 
     std::vector<llvm::Type *> ArgTypes;
@@ -25,11 +25,11 @@ llvm::Value *CodeGenerator::codegen(const AstFunction& func) {
     llvm::BasicBlock *BB = llvm::BasicBlock::Create(*TheContext, "entry", TheFunction);
     Builder->SetInsertPoint(BB);
 
-    NamedValues.clear();
+    ctx.NamedValues.clear();
     for (auto &Arg : TheFunction->args())
-        NamedValues[std::string(Arg.getName())] = &Arg;
+        ctx.NamedValues[std::string(Arg.getName())] = &Arg;
 
-    if (llvm::Value *RetVal = this->codegen(*func.getBody())) {
+    if (llvm::Value *RetVal = this->codegen(*func.getBody(), ctx)) {
         Builder->CreateRet(RetVal);
 
         verifyFunction(*TheFunction);
@@ -39,21 +39,21 @@ llvm::Value *CodeGenerator::codegen(const AstFunction& func) {
 }
 
 
-llvm::Value *CodeGenerator::visit(const AstExprConstLong& expr) const {
+llvm::Value *CodeGenerator::visit(const AstExprConstLong& expr, CodegenContext& ctx) const {
     llvm::Type* Int64Ty = llvm::Type::getInt64Ty(*TheContext); 
     return llvm::ConstantInt::get(Int64Ty, expr.getValue(), true /* isSigned */); 
 }
 
-llvm::Value *CodeGenerator::visit(const AstExprConstBool& expr) const {
+llvm::Value *CodeGenerator::visit(const AstExprConstBool& expr, CodegenContext& ctx) const {
     llvm::Type* Int1Ty = llvm::Type::getInt1Ty(*TheContext); 
     return llvm::ConstantInt::get(Int1Ty, expr.getValue()); 
 }
 
 
-llvm::Value *CodeGenerator::visit(const AstExprVariable& expr) const {
-    auto it = NamedValues.find(expr.getName());
+llvm::Value *CodeGenerator::visit(const AstExprVariable& expr, CodegenContext& ctx) const {
+    auto it = ctx.NamedValues.find(expr.getName());
 
-    if (it == NamedValues.end()) {
+    if (it == ctx.NamedValues.end()) {
       throw CodegenException("Variable not found", expr.getLocation());
     }
     
@@ -61,69 +61,127 @@ llvm::Value *CodeGenerator::visit(const AstExprVariable& expr) const {
 }
 
 
-llvm::Value *CodeGenerator::visit(const AstExprCall& expr) const {
-    throw CodegenException("AstExprCall codegen not implemented", expr.getLocation());
+llvm::Value *CodeGenerator::visit(const AstExprCall& expr, CodegenContext& ctx) const {
+    llvm::Function *CalleeF = TheModule->getFunction(expr.getCallee());
+    if (!CalleeF)
+        throw CodegenException("Function " + expr.getCallee() + " not found", expr.getLocation());
+    
+    if (CalleeF->arg_size() != expr.getArgs().size())
+        throw CodegenException("Wrong number of args", expr.getLocation());
+
+    std::vector<llvm::Value *> ArgsV;
+    for (unsigned i = 0, e = expr.getArgs().size(); i != e; ++i) {
+        ArgsV.push_back(this->codegen(*expr.getArgs()[i], ctx));
+        if (!ArgsV.back())
+            throw CodegenException("Arg returned nullptr", (*expr.getArgs()[i]).getLocation());
+    }
+
+    return Builder->CreateCall(CalleeF, ArgsV, "calltmp");
 }
 
-llvm::Value *CodeGenerator::visit(const AstExprLetIn& expr) const {
-    throw CodegenException("AstExprLetIn codegen not implemented", expr.getLocation());
+llvm::Value *CodeGenerator::visit(const AstExprLetIn& expr, CodegenContext& ctx) const {
+    llvm::Value *RHS = this->codegen(*expr.getExpr(), ctx);
+    if (!RHS) {
+        return nullptr;
+    }
+
+    auto oldBinding = ctx.NamedValues.find(expr.getVariable());
+    llvm::Value *oldVal = nullptr;
+    if (oldBinding != ctx.NamedValues.end()) {
+        oldVal = oldBinding->second;
+    }
+
+    ctx.NamedValues[expr.getVariable()] = RHS; 
+    llvm::Value *BodyVal = this->codegen(*expr.getBody(), ctx);
+    
+    if (oldBinding != ctx.NamedValues.end()) {
+        ctx.NamedValues[expr.getVariable()] = oldVal;
+    } else {
+        ctx.NamedValues.erase(expr.getVariable());
+    }
+
+    return BodyVal;
 }
 
-llvm::Value *CodeGenerator::visit(const AstExprMatch& expr) const {
+llvm::Value *CodeGenerator::visit(const AstExprMatch& expr, CodegenContext& ctx) const {
     throw CodegenException("AstExprMatch codegen not implemented", expr.getLocation());
 }
 
 // --- Arithmetic Binary Operations (Int to Int) ---
 
-llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>& expr) const {
-    throw CodegenException("AstExprBinaryIntToInt::Add codegen not implemented", expr.getLocation());
+llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>& expr, CodegenContext& ctx) const {
+    llvm::Value *L = this->codegen(*expr.getLHS(), ctx);
+    llvm::Value *R = this->codegen(*expr.getRHS(), ctx);
+    return Builder->CreateAdd(L, R, "addtmp");
 }
 
-llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>& expr) const {
-    throw CodegenException("AstExprBinaryIntToInt::Sub codegen not implemented", expr.getLocation());
+llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Sub>& expr, CodegenContext& ctx) const {
+    llvm::Value *L = this->codegen(*expr.getLHS(), ctx);
+    llvm::Value *R = this->codegen(*expr.getRHS(), ctx);
+    return Builder->CreateSub(L, R, "subtmp");
 }
 
-llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>& expr) const {
-    throw CodegenException("AstExprBinaryIntToInt::Mul codegen not implemented", expr.getLocation());
+llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Mul>& expr, CodegenContext& ctx) const {
+    llvm::Value *L = this->codegen(*expr.getLHS(), ctx);
+    llvm::Value *R = this->codegen(*expr.getRHS(), ctx);
+    return Builder->CreateMul(L, R, "multmp");
 }
 
-llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Div>& expr) const {
-    throw CodegenException("AstExprBinaryIntToInt::Div codegen not implemented", expr.getLocation());
+llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToInt<BinaryOpKindIntToInt::Div>& expr, CodegenContext& ctx) const {
+    llvm::Value *L = this->codegen(*expr.getLHS(), ctx);
+    llvm::Value *R = this->codegen(*expr.getRHS(), ctx);
+    return Builder->CreateSDiv(L, R, "divtmp");
 }
 
 // --- Comparison Binary Operations (Int to Bool) ---
 
-llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>& expr) const {
-    throw CodegenException("AstExprBinaryIntToBool::Eq codegen not implemented", expr.getLocation());
+llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Eq>& expr, CodegenContext& ctx) const {
+    llvm::Value *L = this->codegen(*expr.getLHS(), ctx);
+    llvm::Value *R = this->codegen(*expr.getRHS(), ctx);
+    return Builder->CreateICmpEQ(L, R, "eqtmp");
 }
 
-llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Neq>& expr) const {
-    throw CodegenException("AstExprBinaryIntToBool::Neq codegen not implemented", expr.getLocation());
+llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Neq>& expr, CodegenContext& ctx) const {
+    llvm::Value *L = this->codegen(*expr.getLHS(), ctx);
+    llvm::Value *R = this->codegen(*expr.getRHS(), ctx);
+    return Builder->CreateICmpNE(L, R, "neqtmp");
 }
 
-llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Leq>& expr) const {
-    throw CodegenException("AstExprBinaryIntToBool::Leq codegen not implemented", expr.getLocation());
+llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Leq>& expr, CodegenContext& ctx) const {
+    llvm::Value *L = this->codegen(*expr.getLHS(), ctx);
+    llvm::Value *R = this->codegen(*expr.getRHS(), ctx);
+    return Builder->CreateICmpSLE(L, R, "leqtmp");
 }
 
-llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Lt>& expr) const {
-    throw CodegenException("AstExprBinaryIntToBool::Lt codegen not implemented", expr.getLocation());
+llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Lt>& expr, CodegenContext& ctx) const {
+    llvm::Value *L = this->codegen(*expr.getLHS(), ctx);
+    llvm::Value *R = this->codegen(*expr.getRHS(), ctx);
+    return Builder->CreateICmpSLT(L, R, "lttmp");
 }
 
-llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Geq>& expr) const {
-    throw CodegenException("AstExprBinaryIntToBool::Geq codegen not implemented", expr.getLocation());
+llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Geq>& expr, CodegenContext& ctx) const {
+    llvm::Value *L = this->codegen(*expr.getLHS(), ctx);
+    llvm::Value *R = this->codegen(*expr.getRHS(), ctx);
+    return Builder->CreateICmpSGE(L, R, "getmp");
 }
 
-llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>& expr) const {
-    throw CodegenException("AstExprBinaryIntToBool::Gt codegen not implemented", expr.getLocation());
+llvm::Value *CodeGenerator::visit(const AstExprBinaryIntToBool<BinaryOpKindIntToBool::Gt>& expr, CodegenContext& ctx) const {
+    llvm::Value *L = this->codegen(*expr.getLHS(), ctx);
+    llvm::Value *R = this->codegen(*expr.getRHS(), ctx);
+    return Builder->CreateICmpSGT(L, R, "gtmp");
 }
 
 // --- Logical Binary Operations (Bool to Bool) ---
 
-llvm::Value *CodeGenerator::visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>& expr) const {
-    throw CodegenException("AstExprBinaryBoolToBool::And codegen not implemented", expr.getLocation());
+llvm::Value *CodeGenerator::visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::And>& expr, CodegenContext& ctx) const {
+    llvm::Value *L = this->codegen(*expr.getLHS(), ctx);
+    llvm::Value *R = this->codegen(*expr.getRHS(), ctx);
+    return Builder->CreateAnd(L, R, "andtmp");
 }
 
-llvm::Value *CodeGenerator::visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>& expr) const {
-    throw CodegenException("AstExprBinaryBoolToBool::Or codegen not implemented", expr.getLocation());
+llvm::Value *CodeGenerator::visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>& expr, CodegenContext& ctx) const {
+    llvm::Value *L = this->codegen(*expr.getLHS(), ctx);
+    llvm::Value *R = this->codegen(*expr.getRHS(), ctx);
+    return Builder->CreateOr(L, R, "ortmp");
 }
 

@@ -19,7 +19,8 @@ int compileFile(char file[]) {
         if (!func) {
             throw ParserException("Parsing failed while defining a function.", SourceLocation{0, 0});
         }
-        codeGenerator.codegen(*func);
+        CodegenContext ctxt;
+        codeGenerator.codegen(*func, ctxt);
     }
 
     codeGenerator.TheModule->print(llvm::errs(), nullptr);
