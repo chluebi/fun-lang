@@ -36,15 +36,19 @@ llvm::Value *CodeGenerator::codegen(const AstFunction& func, CodegenContext& ctx
 
         return TheFunction;
     }
+
+    throw CodegenException("Function failed to generate", func.getLocation());
 }
 
 
 llvm::Value *CodeGenerator::visit(const AstExprConstLong& expr, CodegenContext& ctx) const {
+    (void) ctx;
     llvm::Type* Int64Ty = llvm::Type::getInt64Ty(*TheContext); 
     return llvm::ConstantInt::get(Int64Ty, expr.getValue(), true /* isSigned */); 
 }
 
 llvm::Value *CodeGenerator::visit(const AstExprConstBool& expr, CodegenContext& ctx) const {
+    (void) ctx;
     llvm::Type* Int1Ty = llvm::Type::getInt1Ty(*TheContext); 
     return llvm::ConstantInt::get(Int1Ty, expr.getValue()); 
 }
