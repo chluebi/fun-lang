@@ -1,8 +1,8 @@
-fn test(n) {
+fn factorial(n) {
     match {
-        n < 2 -> 1
-        true -> test(n-1) + test(n-2)
+        n < 1 -> 1
+        true -> n * factorial(n-1)
     }
 }
 
-test(12)
+factorial(12)

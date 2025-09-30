@@ -31,6 +31,7 @@ public:
 public:
     llvm::Value *codegen(const AstExpr& expr, CodegenContext& ctx) const;
     llvm::Value *codegen(const AstFunction& func, CodegenContext& ctx);
+    llvm::Value *codegenPrintResult(const AstFunction& func, CodegenContext& ctx);
 private:
     llvm::Value *visit(const AstExprConstLong& expr, CodegenContext& ctx) const override;
     llvm::Value *visit(const AstExprConstBool& expr, CodegenContext& ctx) const override;

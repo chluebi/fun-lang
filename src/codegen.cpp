@@ -40,6 +40,102 @@ llvm::Value *CodeGenerator::codegen(const AstFunction& func, CodegenContext& ctx
     throw CodegenException("Function failed to generate", func.getLocation());
 }
 
+// Helper to get or create the printf function declaration
+llvm::Function *getPrintf(CodeGenerator& codeGen) {
+    // Check if printf is already declared
+    llvm::Function *printfFunc = codeGen.TheModule->getFunction("printf");
+    if (printfFunc) {
+        return printfFunc;
+    }
+
+    llvm::Type *i8PtrTy = llvm::PointerType::get(llvm::Type::getInt8Ty(*codeGen.TheContext), 0);
+    llvm::FunctionType *printfType = llvm::FunctionType::get(
+        llvm::Type::getInt32Ty(*codeGen.TheContext), // returns int
+        {i8PtrTy},                                   // takes i8* (char*)
+        true                                         // is variadic
+    );
+
+    printfFunc = llvm::Function::Create(
+        printfType,
+        llvm::Function::ExternalLinkage,
+        "printf",
+        codeGen.TheModule.get()
+    );
+
+    return printfFunc;
+}
+
+// Global constant for the format string "%lld\n"
+llvm::Constant *getFormatString(CodeGenerator& codeGen) {
+
+    llvm::Constant *FormatStr = llvm::ConstantDataArray::getString(
+        *codeGen.TheContext, "%lld\n"
+    );
+
+    // Create a global variable to hold the string
+    llvm::GlobalVariable *GlobalStr = new llvm::GlobalVariable(
+        *codeGen.TheModule,
+        FormatStr->getType(),
+        true, // isConstant
+        llvm::GlobalValue::PrivateLinkage,
+        FormatStr,
+        "formatStr"
+    );
+
+    llvm::Constant *Zero = llvm::ConstantInt::get(llvm::Type::getInt64Ty(*codeGen.TheContext), 0);
+    std::vector<llvm::Constant *> indices = {Zero, Zero};
+    
+    return llvm::ConstantExpr::getGetElementPtr(
+        GlobalStr->getValueType(), GlobalStr, indices
+    );
+}
+
+llvm::Value *CodeGenerator::codegenPrintResult(const AstFunction& func, CodegenContext& ctx) {
+    llvm::Function *TheFunction = TheModule->getFunction(func.getPrototype()->getName());
+
+    std::vector<llvm::Type *> ArgTypes;
+    for (auto arg : func.getPrototype()->getArgs()) {
+        ArgTypes.push_back(llvm::Type::getInt64Ty(*TheContext));
+    }
+
+    llvm::FunctionType *FT = llvm::FunctionType::get(llvm::Type::getInt64Ty(*TheContext), ArgTypes, false);
+
+    llvm::Function *F = llvm::Function::Create(FT, llvm::Function::ExternalLinkage, func.getPrototype()->getName(), TheModule.get());
+
+    unsigned Idx = 0;
+    for (auto &Arg : F->args())
+        Arg.setName(func.getPrototype()->getArgs()[Idx++].Name);
+
+    TheFunction = F;
+
+    llvm::BasicBlock *BB = llvm::BasicBlock::Create(*TheContext, "entry", TheFunction);
+    Builder->SetInsertPoint(BB);
+
+    ctx.NamedValues.clear();
+    for (auto &Arg : TheFunction->args())
+        ctx.NamedValues[std::string(Arg.getName())] = &Arg;
+
+    if (llvm::Value *RetVal = this->codegen(*func.getBody(), ctx)) {
+        llvm::Function *printfFunc = getPrintf(*this);
+        llvm::Constant *formatStr = getFormatString(*this);
+
+        std::vector<llvm::Value *> args;
+        args.push_back(formatStr);
+        args.push_back(RetVal);
+
+        Builder->CreateCall(printfFunc, args, "printcall");
+        
+        llvm::Value *zero = llvm::ConstantInt::get(llvm::Type::getInt64Ty(*TheContext), 0);
+        Builder->CreateRet(zero);
+
+        verifyFunction(*TheFunction);
+
+        return TheFunction;
+    }
+
+    throw CodegenException("Function failed to generate", func.getLocation());
+}
+
 
 llvm::Value *CodeGenerator::visit(const AstExprConstLong& expr, CodegenContext& ctx) const {
     (void) ctx;
