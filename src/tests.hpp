@@ -68,6 +68,14 @@ namespace SimpleTestFramework {
             std::cout << GREEN << "Assertion Passed: " << #expected << " == " << #actual << RESET << std::endl; \
         }
 
+    #define ASSERT_NE(unexpected, actual) \
+        if (unexpected == actual) { \
+            std::cout << RED << "Assertion Failed: " << #unexpected << " (" << unexpected << ") == " << #actual << " (" << actual << "), Expected them to be different." << RESET << std::endl; \
+            SimpleTestFramework::globalTestRunner.failTest(); \
+        } else { \
+            std::cout << GREEN << "Assertion Passed: " << #unexpected << " != " << #actual << RESET << std::endl; \
+        }
+
     // New macro for expecting an InterpreterException
     #define ASSERT_THROWS(expression, ExceptionType) \
         try { \

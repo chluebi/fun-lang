@@ -14,6 +14,7 @@ class InterpreterValue {
 public:
     virtual ~InterpreterValue() = default;
     virtual std::unique_ptr<InterpreterValue> clone() const = 0;
+    virtual std::string toString() const = 0; 
 };
 
 class InterpreterValueLong : public InterpreterValue {
@@ -22,6 +23,7 @@ public:
     InterpreterValueLong(const long &Value);
     long getValue() const;
     std::unique_ptr<InterpreterValue> clone() const override;
+    std::string toString() const override;
 };
 
 class InterpreterValueBool : public InterpreterValue {
@@ -30,6 +32,7 @@ public:
     InterpreterValueBool(const bool &Value);
     bool getValue() const;
     std::unique_ptr<InterpreterValue> clone() const override;
+    std::string toString() const override;
 };
 
 class InterpreterValueArray : public InterpreterValue {
@@ -39,6 +42,7 @@ public:
     InterpreterValueArray(const std::vector<std::unique_ptr<InterpreterValue>> &Value);
     const std::vector<std::unique_ptr<InterpreterValue>>& getValue() const;
     std::unique_ptr<InterpreterValue> clone() const override;
+    std::string toString() const override;
 };
 
 

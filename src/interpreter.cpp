@@ -2,11 +2,15 @@
 #include "interpreter_exception.hpp"
 #include <utility>
 #include <string>
+#include <sstream>
 
 InterpreterValueLong::InterpreterValueLong(const long &Value) : Value(Value) {}
 long InterpreterValueLong::getValue() const { return Value; }
 std::unique_ptr<InterpreterValue> InterpreterValueLong::clone() const {
     return std::make_unique<InterpreterValueLong>(Value);
+}
+std::string InterpreterValueLong::toString() const {
+    return std::to_string(Value);
 }
 
 InterpreterValueBool::InterpreterValueBool(const bool &Value) : Value(Value) {}
@@ -14,20 +18,36 @@ bool InterpreterValueBool::getValue() const { return Value; }
 std::unique_ptr<InterpreterValue> InterpreterValueBool::clone() const {
     return std::make_unique<InterpreterValueBool>(Value);
 }
+std::string InterpreterValueBool::toString() const {
+    return Value ? "true" : "false";
+}
 
 InterpreterValueArray::InterpreterValueArray(const std::vector<std::unique_ptr<InterpreterValue>> &Value) {
     for (const auto& val_ptr : Value) {
         this->Value.push_back(val_ptr->clone());
     }
 }
-
 const std::vector<std::unique_ptr<InterpreterValue>>& InterpreterValueArray::getValue() const {
     return this->Value;
 }
-
 std::unique_ptr<InterpreterValue> InterpreterValueArray::clone() const {
     return std::make_unique<InterpreterValueArray>(this->Value);
 }
+std::string InterpreterValueArray::toString() const {
+    std::stringstream ss;
+    ss << "[";
+    
+    for (size_t i = 0; i < Value.size(); ++i) {
+        ss << Value[i]->toString();
+        
+        if (i < Value.size() - 1) {
+            ss << ", ";
+        }
+    }
+    ss << "]";
+    return ss.str();
+}
+
 
 
 InterpreterValue* Context::getValue(const std::string& name) const {
@@ -107,6 +127,7 @@ std::unique_ptr<InterpreterValue> Interpreter::visit(const AstExprConstArray& ex
 
     for (const auto& elementExpr : expr.getElements()) {
         auto evaluated = this->eval(*elementExpr);
+        std::cout << "Evaluated something " +  evaluated->toString() + "\n";
         evaluatedElements.push_back(std::move(evaluated));
     }
 

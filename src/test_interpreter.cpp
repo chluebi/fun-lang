@@ -28,6 +28,7 @@ bool getBoolResult(std::unique_ptr<InterpreterValue> result_val) {
 }
 
 
+
 std::unique_ptr<InterpreterValue> evaluateExpression(std::unique_ptr<AstExpr> expr) {
     Context context;
 
@@ -658,6 +659,144 @@ TEST_CASE(GoBackToOriginalContext) {
     long result = getLongResult(evaluateExpression(std::move(expr)));
     ASSERT_EQ(162L, result);
 }
+
+TEST_CASE(ArrayCreation) {
+    // [10L, 20L, 30L]
+    std::vector<std::unique_ptr<AstExpr>> elements;
+    elements.push_back(std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 10L));
+    elements.push_back(std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 20L));
+    elements.push_back(std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 30L));
+
+    auto expr = std::make_unique<AstExprConstArray>(SourceLocation{0, 0}, std::make_unique<Long>(), std::move(elements));
+    std::unique_ptr<InterpreterValue> result_val = evaluateExpression(std::move(expr));
+    auto* result_array_ptr = dynamic_cast<InterpreterValueArray*>(result_val.get());
+
+    ASSERT_NE(nullptr, result_array_ptr);
+    const auto* array_ptr = &result_array_ptr->getValue(); 
+    ASSERT_EQ(3, array_ptr->size());
+
+    ASSERT_EQ(10L, dynamic_cast<InterpreterValueLong*>(array_ptr->at(0).get())->getValue());
+    ASSERT_EQ(20L, dynamic_cast<InterpreterValueLong*>(array_ptr->at(1).get())->getValue());
+    ASSERT_EQ(30L, dynamic_cast<InterpreterValueLong*>(array_ptr->at(2).get())->getValue());
+}
+
+TEST_CASE(ArrayIndexing_Valid) {
+    // Create array [100L, 200L, 300L]
+    std::vector<std::unique_ptr<AstExpr>> elements;
+    elements.push_back(std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 100L));
+    elements.push_back(std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 200L));
+    elements.push_back(std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 300L));
+    auto array_expr = std::make_unique<AstExprConstArray>(SourceLocation{0, 0}, std::make_unique<Long>(), std::move(elements));
+
+    // Array indexing expression: [100L, 200L, 300L][1L]
+    auto expr = std::make_unique<AstExprIndex>(
+        SourceLocation{0, 0},
+        std::move(array_expr),                       // Indexee: The array
+        std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 1L) // Indexer: 1L
+    );
+
+    long result = getLongResult(evaluateExpression(std::move(expr)));
+    ASSERT_EQ(200L, result);
+}
+
+TEST_CASE(ArrayIndexing_ExpressionIndexer) {
+    // Array: [40L, 50L, 60L, 70L]
+    std::vector<std::unique_ptr<AstExpr>> elements;
+    elements.push_back(std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 40L));
+    elements.push_back(std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 50L));
+    elements.push_back(std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 60L));
+    elements.push_back(std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 70L));
+    auto array_expr = std::make_unique<AstExprConstArray>(SourceLocation{0, 0}, std::make_unique<Long>(), std::move(elements));
+
+    // Indexer: (1L + 2L) == 3L
+    auto indexer_expr = std::make_unique<AstExprBinaryIntToInt<BinaryOpKindIntToInt::Add>>(
+        SourceLocation{0, 0},
+        std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 1L),
+        std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 2L)
+    );
+
+    // Expression: Array[1L + 2L]
+    auto expr = std::make_unique<AstExprIndex>(
+        SourceLocation{0, 0},
+        std::move(array_expr),
+        std::move(indexer_expr)
+    );
+
+    long result = getLongResult(evaluateExpression(std::move(expr)));
+    ASSERT_EQ(70L, result); // Index 3 is 70L
+}
+
+// --- Expected Failure Tests for Indexing ---
+
+TEST_CASE(ArrayIndexing_OutOfBounds_High) {
+    // Array: [1L, 2L] (Size 2)
+    std::vector<std::unique_ptr<AstExpr>> elements;
+    elements.push_back(std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 1L));
+    elements.push_back(std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 2L));
+    auto array_expr = std::make_unique<AstExprConstArray>(SourceLocation{0, 0}, std::make_unique<Long>(), std::move(elements));
+
+    // Index: 2L (out of bounds)
+    auto expr = std::make_unique<AstExprIndex>(
+        SourceLocation{0, 0},
+        std::move(array_expr),
+        std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 2L)
+    );
+    
+    Interpreter interpreter = Interpreter(Context());
+    ASSERT_THROWS(interpreter.eval(*expr), IndexOutOfBoundsException);
+}
+
+TEST_CASE(ArrayIndexing_NegativeIndex) {
+    // Array: [1L, 2L]
+    std::vector<std::unique_ptr<AstExpr>> elements;
+    elements.push_back(std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 1L));
+    elements.push_back(std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 2L));
+    auto array_expr = std::make_unique<AstExprConstArray>(SourceLocation{0, 0}, std::make_unique<Long>(), std::move(elements));
+
+    // Index: -1L
+    auto expr = std::make_unique<AstExprIndex>(
+        SourceLocation{0, 0},
+        std::move(array_expr),
+        std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, -1L)
+    );
+    
+    Interpreter interpreter = Interpreter(Context());
+    ASSERT_THROWS(interpreter.eval(*expr), IndexOutOfBoundsException);
+}
+
+TEST_CASE(ArrayIndexing_Indexee_TypeError) {
+    // Indexee: 10L (not an array)
+    auto indexee_expr = std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 10L);
+
+    // Expression: 10L[1L]
+    auto expr = std::make_unique<AstExprIndex>(
+        SourceLocation{0, 0},
+        std::move(indexee_expr),
+        std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 1L)
+    );
+    
+    Interpreter interpreter = Interpreter(Context());
+    ASSERT_THROWS(interpreter.eval(*expr), TypeMismatchException);
+}
+
+TEST_CASE(ArrayIndexing_Indexer_TypeError) {
+    // Array: [1L, 2L]
+    std::vector<std::unique_ptr<AstExpr>> elements;
+    elements.push_back(std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 1L));
+    elements.push_back(std::make_unique<AstExprConstLong>(SourceLocation{0, 0}, 2L));
+    auto array_expr = std::make_unique<AstExprConstArray>(SourceLocation{0, 0}, std::make_unique<Long>(), std::move(elements));
+
+    // Indexer: true (not an integer)
+    auto expr = std::make_unique<AstExprIndex>(
+        SourceLocation{0, 0},
+        std::move(array_expr),
+        std::make_unique<AstExprConstBool>(SourceLocation{0, 0}, true)
+    );
+    
+    Interpreter interpreter = Interpreter(Context());
+    ASSERT_THROWS(interpreter.eval(*expr), TypeMismatchException);
+}
+
 
 int main() {
     RUN_ALL_TESTS();
