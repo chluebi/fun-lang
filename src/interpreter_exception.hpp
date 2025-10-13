@@ -49,4 +49,10 @@ public:
         : InterpreterException("Match expression exhausted without finding a matching path", loc) {}
 };
 
+class IndexOutOfBoundsException : public InterpreterException {
+public:
+    IndexOutOfBoundsException(const SourceLocation& loc)
+        : InterpreterException("Index out of bounds", loc) {}
+};
+
 #endif

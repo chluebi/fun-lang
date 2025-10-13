@@ -121,6 +121,39 @@ std::unique_ptr<InterpreterValue> Interpreter::visit(const AstExprVariable& expr
     return value->clone();
 }
 
+std::unique_ptr<InterpreterValue> Interpreter::visit(const AstExprIndex& expr) const {
+    auto indexerValue = this->eval(*expr.getIndexer());
+
+    auto indexerLong = dynamic_cast<InterpreterValueLong*>(indexerValue.get());
+    if (!indexerLong) {
+        throw TypeMismatchException("Array index must evaluate to an integer", expr.getIndexer()->getLocation());
+    }
+    long index = indexerLong->getValue();
+    auto indexeeValue = this->eval(*expr.getIndexee());
+    
+    auto indexeeArray = dynamic_cast<InterpreterValueArray*>(indexeeValue.get());
+    if (!indexeeArray) {
+        throw TypeMismatchException("Index operation applied to a non-array type", expr.getIndexee()->getLocation());
+    }
+    
+    const auto& arrayElements = indexeeArray->getValue();
+    size_t arraySize = arrayElements.size();
+
+    if (index < 0) {
+        throw IndexOutOfBoundsException(
+            expr.getIndexer()->getLocation()
+        );
+    }
+
+    if (static_cast<size_t>(index) >= arraySize) {
+        throw IndexOutOfBoundsException(
+            expr.getIndexer()->getLocation()
+        );
+    }
+
+    return arrayElements[index]->clone();
+}
+
 std::unique_ptr<InterpreterValue> Interpreter::visit(const AstExprCall& expr) const {
     const AstFunction* calleeFunc = CurrentContext->getFunction(expr.getCallee());
     if (!calleeFunc) {

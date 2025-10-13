@@ -33,6 +33,7 @@ class AstExprConstLong;
 class AstExprConstBool;
 class AstExprConstArray;
 class AstExprVariable;
+class AstExprIndex;
 class AstExprCall;
 class AstExprLetIn;
 class AstExprMatch;
@@ -56,6 +57,7 @@ public:
     virtual std::unique_ptr<InterpreterValue> visit(const AstExprConstBool& expr) const = 0;
     virtual std::unique_ptr<InterpreterValue> visit(const AstExprConstArray& expr) const = 0;
     virtual std::unique_ptr<InterpreterValue> visit(const AstExprVariable& expr) const = 0;
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprIndex& expr) const = 0;
     virtual std::unique_ptr<InterpreterValue> visit(const AstExprCall& expr) const = 0;
     virtual std::unique_ptr<InterpreterValue> visit(const AstExprLetIn& expr) const = 0;
     virtual std::unique_ptr<InterpreterValue> visit(const AstExprMatch& expr) const = 0;
@@ -86,6 +88,7 @@ public:
     virtual llvm::Value *visit(const AstExprConstBool& expr, CodegenContext& ctx) const = 0;
     virtual llvm::Value *visit(const AstExprConstArray& expr, CodegenContext& ctx) const = 0;
     virtual llvm::Value *visit(const AstExprVariable& expr, CodegenContext& ctx) const = 0;
+    virtual llvm::Value *visit(const AstExprIndex& expr, CodegenContext& ctx) const = 0;
     virtual llvm::Value *visit(const AstExprCall& expr, CodegenContext& ctx) const = 0;
     virtual llvm::Value *visit(const AstExprLetIn& expr, CodegenContext& ctx) const = 0;
     virtual llvm::Value *visit(const AstExprMatch& expr, CodegenContext& ctx) const = 0;
@@ -226,6 +229,20 @@ class AstExprVariable : public AstExpr {
 public:
     AstExprVariable(const SourceLocation &loc, const std::string &Name);
     const std::string& getName() const;
+    std::unique_ptr<AstExpr> clone() const override;
+
+    std::unique_ptr<InterpreterValue> accept(const AstValueVisitor& visitor) const override;
+    llvm::Value *accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const override;
+};
+
+class AstExprIndex : public AstExpr {
+    std::unique_ptr<AstExpr> Indexee;
+    std::unique_ptr<AstExpr> Indexer;
+public:
+    AstExprIndex(const SourceLocation &loc, const std::unique_ptr<AstExpr> &Indexee,
+                 const std::unique_ptr<AstExpr> &Indexer);
+    const std::unique_ptr<AstExpr>& getIndexee() const;
+    const std::unique_ptr<AstExpr>& getIndexer() const;
     std::unique_ptr<AstExpr> clone() const override;
 
     std::unique_ptr<InterpreterValue> accept(const AstValueVisitor& visitor) const override;

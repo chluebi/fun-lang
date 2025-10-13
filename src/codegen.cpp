@@ -167,6 +167,13 @@ llvm::Value *CodeGenerator::visit(const AstExprVariable& expr, CodegenContext& c
     return it->second;
 }
 
+llvm::Value *CodeGenerator::visit(const AstExprIndex& expr, CodegenContext& ctx) const {
+    assert(false && "not implemented");
+    (void) ctx;
+    llvm::Type* Int1Ty = llvm::Type::getInt1Ty(*TheContext); 
+    return llvm::ConstantInt::get(Int1Ty, false);
+}
+
 
 llvm::Value *CodeGenerator::visit(const AstExprCall& expr, CodegenContext& ctx) const {
     llvm::Function *CalleeF = TheModule->getFunction(expr.getCallee());

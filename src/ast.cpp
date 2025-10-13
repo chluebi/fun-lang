@@ -131,6 +131,29 @@ llvm::Value *AstExprVariable::accept(const AstLLVMValueVisitor& visitor, Codegen
     return visitor.visit(*this, ctx);
 }
 
+
+AstExprIndex::AstExprIndex(const SourceLocation &loc, const std::unique_ptr<AstExpr> &Indexee,
+                           const std::unique_ptr<AstExpr> &Indexer) 
+    : AstExpr(loc), 
+      Indexee(Indexee->clone()), 
+      Indexer(Indexer->clone()) {}
+const std::unique_ptr<AstExpr>& AstExprIndex::getIndexee() const {
+    return Indexee;
+}
+const std::unique_ptr<AstExpr>& AstExprIndex::getIndexer() const {
+    return Indexer;
+}
+std::unique_ptr<AstExpr> AstExprIndex::clone() const {
+    return std::make_unique<AstExprIndex>(Location, Indexee, Indexer);
+}
+std::unique_ptr<InterpreterValue> AstExprIndex::accept(const AstValueVisitor& visitor) const {
+    return visitor.visit(*this);
+}
+llvm::Value *AstExprIndex::accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const {
+    return visitor.visit(*this, ctx);
+}
+
+
 AstExprCall::AstExprCall(const SourceLocation &loc, const std::string &Callee,
             std::vector<std::unique_ptr<AstExpr>> Args) : AstExpr(loc), Callee(Callee), Args(std::move(Args)) {}
 const std::string& AstExprCall::getCallee() const { return Callee; }

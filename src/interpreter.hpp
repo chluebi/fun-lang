@@ -93,6 +93,7 @@ private:
     std::unique_ptr<InterpreterValue> visit(const AstExprConstBool& expr) const override;
     std::unique_ptr<InterpreterValue> visit(const AstExprConstArray& expr) const override;
     std::unique_ptr<InterpreterValue> visit(const AstExprVariable& expr) const override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprIndex& expr) const override;
     std::unique_ptr<InterpreterValue> visit(const AstExprCall& expr) const override;
     std::unique_ptr<InterpreterValue> visit(const AstExprLetIn& expr) const override;
     std::unique_ptr<InterpreterValue> visit(const AstExprMatch& expr) const override;
