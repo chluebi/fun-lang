@@ -11,6 +11,8 @@ std::string tokenToString(Token token) {
         case TokenKind::RParen: return ")";
         case TokenKind::LBrace: return "{";
         case TokenKind::RBrace: return "}";
+        case TokenKind::LBracket: return "[";
+        case TokenKind::RBracket: return "]";
         case TokenKind::Equal: return "==";
         case TokenKind::Comma: return ",";
         case TokenKind::Arrow: return "->";
@@ -81,6 +83,8 @@ void Lexer::parseOperator() {
     else if (c1 == ')') kind = TokenKind::RParen;
     else if (c1 == '{') kind = TokenKind::LBrace;
     else if (c1 == '}') kind = TokenKind::RBrace;
+    else if (c1 == '[') kind = TokenKind::LBracket;
+    else if (c1 == ']') kind = TokenKind::RBracket;
     else if (c1 == ',') kind = TokenKind::Comma;
     else if (c1 == '+') kind = TokenKind::Add;
     else if (c1 == '-') {

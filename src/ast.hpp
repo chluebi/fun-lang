@@ -116,6 +116,13 @@ public:
     virtual std::unique_ptr<Type> clone() const = 0;
 };
 
+class Any : public Type {
+public:
+    Any();
+    std::unique_ptr<AstExpr> defaultValue() const override;
+    std::unique_ptr<Type> clone() const override;
+};
+
 class Long : public Type {
 public:
     Long();

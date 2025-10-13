@@ -2,6 +2,15 @@
 #include "interpreter.hpp"
 #include "codegen.hpp"
 
+#include <stdexcept>
+
+Any::Any() {}
+std::unique_ptr<AstExpr> Any::defaultValue() const {
+    throw std::runtime_error("Any has no default");
+}
+std::unique_ptr<Type> Any::clone() const {
+    return std::make_unique<Any>();
+}
 
 Long::Long() {}
 std::unique_ptr<AstExpr> Long::defaultValue() const {

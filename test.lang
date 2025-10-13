@@ -5,4 +5,4 @@ fn factorial(n) {
     }
 }
 
-factorial(12)
+[factorial(12)][0]

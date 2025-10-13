@@ -26,6 +26,7 @@ std::unique_ptr<AstExpr> Parser::parseExpression() {
     size_t startlexerPos = getLexerPosition();
     auto LHS = parsePrimary();
     if (!LHS) throw ParserException("Invalid LHS", SourceLocation {startlexerPos, getLexerPosition()});
+    LHS = parsePostfix(std::move(LHS));
 
     std::function<std::unique_ptr<AstExpr>(int, std::unique_ptr<AstExpr>)> 
     parseBinOpRHS = [&](int exprPrec, std::unique_ptr<AstExpr> LHS) {
@@ -38,6 +39,7 @@ std::unique_ptr<AstExpr> Parser::parseExpression() {
 
             auto RHS = parsePrimary();
             if (!RHS) return std::unique_ptr<AstExpr>(nullptr);
+            RHS = parsePostfix(std::move(RHS));
 
             int nextPrec = getOpPrecedence(get().Kind);
             if (tokenPrec < nextPrec) {
@@ -139,6 +141,81 @@ std::unique_ptr<AstExpr> Parser::parseExpression() {
     return parseBinOpRHS(0, std::move(LHS));
 }
 
+std::vector<std::unique_ptr<AstExpr>> Parser::parseCallArgs() {
+    std::vector<std::unique_ptr<AstExpr>> args;
+
+    // We assume the '(' has already been consumed by the caller (parsePostfix)
+    
+    if (get().Kind != TokenKind::RParen) {
+        while (true) {
+            size_t callArgExprLexerPosition = getLexerPosition();
+            if (auto arg = parseExpression()) {
+                args.push_back(std::move(arg));
+            } else {
+                throw ParserException("Invalid Call Argument ", SourceLocation {callArgExprLexerPosition, getLexerPosition()});
+            }
+
+            Token nextToken = get();
+            if (get().Kind == TokenKind::RParen) break;
+            if (!consume(TokenKind::Comma)) {
+                throw ParserException("Expected ',' or ')' after argument, found " + tokenToString(nextToken) + " instead", nextToken.Location);
+            }
+        }
+    }
+    return args;
+}
+
+std::unique_ptr<AstExpr> Parser::parsePostfix(std::unique_ptr<AstExpr> LHS) {
+    // Loop to handle chained postfix operators: func(1)[2].field
+    while (true) {
+        Token currentToken = get();
+
+        // 1. Array Indexing: LHS[index]
+        if (currentToken.Kind == TokenKind::LBracket) {
+            nextToken(); // Consume '['
+            
+            auto index = parseExpression();
+            if (!index) {
+                throw ParserException("Expected index expression in array indexing", get().Location);
+            }
+
+            Token endToken = get();
+            if (!consume(TokenKind::RBracket)) {
+                throw ParserException("Expected ']' to close array index", endToken.Location);
+            }
+            
+            SourceLocation indexLoc = mergeLocations(LHS->getLocation(), endToken.Location);
+            LHS = std::make_unique<AstExprIndex>(indexLoc, std::move(LHS), std::move(index));
+            // Continue loop for more postfix ops (e.g., array[i][j])
+        } 
+        
+        // 2. Function Call: LHS(args...)
+        else if (currentToken.Kind == TokenKind::LParen) {
+            nextToken(); // Consume '('
+            
+            std::vector<std::unique_ptr<AstExpr>> args = parseCallArgs();
+            
+            Token endToken = get();
+            if (!consume(TokenKind::RParen)) {
+                throw ParserException("Expected ')' after argument list", endToken.Location);
+            }
+            
+            SourceLocation callLoc = mergeLocations(LHS->getLocation(), endToken.Location);
+
+            if (auto var = dynamic_cast<AstExprVariable*>(LHS.get())) {
+                LHS = std::make_unique<AstExprCall>(callLoc, var->getName(), std::move(args));
+            } else {
+                throw ParserException("Function calls must currently use a identifier as the function.", currentToken.Location);
+            }
+        }
+        // No more postfix operators found
+        else {
+            return LHS; 
+        }
+    }
+}
+
+
 std::unique_ptr<AstExpr> Parser::parsePrimary() {
     Token currentToken = get();
     switch (currentToken.Kind) {
@@ -158,7 +235,9 @@ std::unique_ptr<AstExpr> Parser::parsePrimary() {
             return val;
         }
         case TokenKind::Identifier: {
-            return parseCallOrVariable();
+            Token nameToken = get();
+            nextToken();
+            return std::make_unique<AstExprVariable>(nameToken.Location, nameToken.Text);
         }
         case TokenKind::LParen: {
             nextToken();
@@ -169,6 +248,7 @@ std::unique_ptr<AstExpr> Parser::parsePrimary() {
             }
             return expr;
         }
+        case TokenKind::LBracket: return parseArrayLiteral();
         case TokenKind::Let: return parseLetIn();
         case TokenKind::Match: return parseMatch();
         default:
@@ -242,38 +322,35 @@ std::unique_ptr<AstExpr> Parser::parseMatch() {
     return std::make_unique<AstExprMatch>(mergeLocations(startLocation, endLocation), std::move(paths));
 }
 
-
-std::unique_ptr<AstExpr> Parser::parseCallOrVariable() {
-    Token nameToken = get();
-    nextToken(); // consume identifier
-
-    if (get().Kind != TokenKind::LParen) {
-        return std::make_unique<AstExprVariable>(nameToken.Location, nameToken.Text);
-    }
-
-    nextToken(); // consume '('
-    std::vector<std::unique_ptr<AstExpr>> args;
-    if (get().Kind != TokenKind::RParen) {
+std::unique_ptr<AstExpr> Parser::parseArrayLiteral() {
+    Token startToken = get();
+    nextToken(); // Consume '['
+    
+    std::vector<std::unique_ptr<AstExpr>> elements;
+    
+    if (get().Kind != TokenKind::RBracket) {
         while (true) {
+            auto element = parseExpression();
+            if (!element) throw ParserException("Expected array element expression", get().Location);
+            elements.push_back(std::move(element));
 
-            size_t callArgExprLexerPosition = getLexerPosition();
-            if (auto arg = parseExpression()) {
-                args.push_back(std::move(arg));
-            } else {
-                throw ParserException("Invalid Call Argument ", SourceLocation {callArgExprLexerPosition, getLexerPosition()});
-            }
-
-            Token nextToken = get();
-            if (get().Kind == TokenKind::RParen) break;
+            if (get().Kind == TokenKind::RBracket) break;
+            
             if (!consume(TokenKind::Comma)) {
-                throw ParserException("Expected ',' or ')' after argument, found " + tokenToString(nextToken) + " instead", nextToken.Location);
+                throw ParserException("Expected ',' or ']' in array literal", get().Location);
             }
         }
     }
+    
     Token endToken = get();
-    nextToken(); // consume ')'
-
-    return std::make_unique<AstExprCall>(mergeLocations(nameToken.Location, endToken.Location), nameToken.Text, std::move(args));
+    if (!consume(TokenKind::RBracket)) {
+        throw ParserException("Expected ']' at end of array literal", endToken.Location);
+    }
+    
+    SourceLocation arrayLoc = mergeLocations(startToken.Location, endToken.Location);
+    auto elementType = std::make_unique<Any>();
+    
+    return std::make_unique<AstExprConstArray>(arrayLoc, std::move(elementType), std::move(elements));
 }
 
 std::unique_ptr<AstPrototype> Parser::parsePrototype() {

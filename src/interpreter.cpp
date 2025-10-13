@@ -127,7 +127,6 @@ std::unique_ptr<InterpreterValue> Interpreter::visit(const AstExprConstArray& ex
 
     for (const auto& elementExpr : expr.getElements()) {
         auto evaluated = this->eval(*elementExpr);
-        std::cout << "Evaluated something " +  evaluated->toString() + "\n";
         evaluatedElements.push_back(std::move(evaluated));
     }
 

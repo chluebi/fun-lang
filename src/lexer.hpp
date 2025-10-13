@@ -12,7 +12,7 @@
 enum class TokenKind {
     Eof,
     Fn, Let, In, Match,
-    LParen, RParen, LBrace, RBrace,
+    LParen, RParen, LBrace, RBrace, LBracket, RBracket,
     Equal, Comma, Arrow,
     Add, Sub, Mul, Div,
     Eq, Neq, Leq, Lt, Geq, Gt,

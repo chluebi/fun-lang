@@ -8,9 +8,12 @@ class Parser {
     std::unique_ptr<AstExpr> parsePrimary();
     std::unique_ptr<AstExpr> parseLetIn();
     std::unique_ptr<AstExpr> parseMatch();
-    std::unique_ptr<AstExpr> parseCallOrVariable();
+    std::unique_ptr<AstExpr> parseVariable();
     std::unique_ptr<AstPrototype> parsePrototype();
-
+    std::unique_ptr<AstExpr> parseArrayLiteral();
+    std::vector<std::unique_ptr<AstExpr>> parseCallArgs();
+    std::unique_ptr<AstExpr> parsePostfix(std::unique_ptr<AstExpr> LHS);
+    
     void nextToken() { TheLexer.nextToken(); }
     bool consume(TokenKind kind);
     void reportError(const std::string& msg);
