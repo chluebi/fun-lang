@@ -31,6 +31,7 @@ enum class BinaryOpKindBoolToBool {
 class AstExpr;
 class AstExprConstLong;
 class AstExprConstBool;
+class AstExprConstArray;
 class AstExprVariable;
 class AstExprCall;
 class AstExprLetIn;
@@ -53,6 +54,7 @@ public:
 
     virtual std::unique_ptr<InterpreterValue> visit(const AstExprConstLong& expr) const = 0;
     virtual std::unique_ptr<InterpreterValue> visit(const AstExprConstBool& expr) const = 0;
+    virtual std::unique_ptr<InterpreterValue> visit(const AstExprConstArray& expr) const = 0;
     virtual std::unique_ptr<InterpreterValue> visit(const AstExprVariable& expr) const = 0;
     virtual std::unique_ptr<InterpreterValue> visit(const AstExprCall& expr) const = 0;
     virtual std::unique_ptr<InterpreterValue> visit(const AstExprLetIn& expr) const = 0;
@@ -82,6 +84,7 @@ public:
 
     virtual llvm::Value *visit(const AstExprConstLong& expr, CodegenContext& ctx) const = 0;
     virtual llvm::Value *visit(const AstExprConstBool& expr, CodegenContext& ctx) const = 0;
+    virtual llvm::Value *visit(const AstExprConstArray& expr, CodegenContext& ctx) const = 0;
     virtual llvm::Value *visit(const AstExprVariable& expr, CodegenContext& ctx) const = 0;
     virtual llvm::Value *visit(const AstExprCall& expr, CodegenContext& ctx) const = 0;
     virtual llvm::Value *visit(const AstExprLetIn& expr, CodegenContext& ctx) const = 0;
@@ -124,6 +127,16 @@ public:
     std::unique_ptr<Type> clone() const override;
 };
 
+class Array : public Type {
+    std::unique_ptr<Type> ElementType;
+public:
+    Array(std::unique_ptr<Type> elementType);
+    const Type* getElementType() const;
+    std::unique_ptr<AstExpr> defaultValue() const override;
+    std::unique_ptr<Type> clone() const override;
+};
+
+
 
 class AstExpr {
 protected:
@@ -165,6 +178,18 @@ public:
     llvm::Value *accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const override;
 };
 
+class AstExprConstArray : public AstExprConst {
+    std::vector<std::unique_ptr<AstExpr>> Elements;
+public:
+    AstExprConstArray(const SourceLocation &loc, std::vector<std::unique_ptr<AstExpr>> Elements);
+    const std::vector<std::unique_ptr<AstExpr>>& getElements() const;
+    std::unique_ptr<AstExpr> clone() const override;
+
+    std::unique_ptr<InterpreterValue> accept(const AstValueVisitor& visitor) const override;
+    llvm::Value *accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const override;
+};
+
+
 struct AstArg {
     SourceLocation Location;
     std::string Name;
@@ -204,6 +229,8 @@ public:
     std::unique_ptr<InterpreterValue> accept(const AstValueVisitor& visitor) const override;
     llvm::Value *accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const override;
 };
+
+
 
 class AstExprCall : public AstExpr {
     std::string Callee;
