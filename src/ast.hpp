@@ -103,6 +103,27 @@ public:
     virtual llvm::Value *visit(const AstExprBinaryBoolToBool<BinaryOpKindBoolToBool::Or>& expr, CodegenContext& ctx) const = 0;
 };
 
+class Type {
+public:
+    virtual ~Type() = default;
+    virtual std::unique_ptr<AstExpr> defaultValue() const = 0;
+    virtual std::unique_ptr<Type> clone() const = 0;
+};
+
+class Long : public Type {
+public:
+    Long();
+    std::unique_ptr<AstExpr> defaultValue() const override;
+    std::unique_ptr<Type> clone() const override;
+};
+
+class Bool : public Type {
+public:
+    Bool();
+    std::unique_ptr<AstExpr> defaultValue() const override;
+    std::unique_ptr<Type> clone() const override;
+};
+
 
 class AstExpr {
 protected:

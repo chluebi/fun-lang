@@ -2,6 +2,24 @@
 #include "interpreter.hpp"
 #include "codegen.hpp"
 
+
+Long::Long() {}
+std::unique_ptr<AstExpr> Long::defaultValue() const {
+    return std::make_unique<AstExprConstLong>(SourceLocation {0, 0}, 1);
+}
+std::unique_ptr<Type> Long::clone() const {
+    return std::make_unique<Long>();
+}
+
+Bool::Bool() {}
+std::unique_ptr<AstExpr> Bool::defaultValue() const {
+    return std::make_unique<AstExprConstBool>(SourceLocation {0, 0}, 1);
+}
+std::unique_ptr<Type> Bool::clone() const {
+    return std::make_unique<Bool>();
+}
+
+
 AstExpr::AstExpr(const SourceLocation& loc) : Location(loc) {}
 const SourceLocation& AstExpr::getLocation() const { return Location; }
 
