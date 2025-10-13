@@ -35,7 +35,8 @@ public:
 private:
     llvm::Value *visit(const AstExprConstLong& expr, CodegenContext& ctx) const override;
     llvm::Value *visit(const AstExprConstBool& expr, CodegenContext& ctx) const override;
-    llvm::Value *visit(const AstExprVariable& expr, CodegenContext& ctx) const override;
+    llvm::Value *visit(const AstExprConstArray &expr, CodegenContext &ctx) const override;
+    llvm::Value *visit(const AstExprVariable &expr, CodegenContext &ctx) const override;
     llvm::Value *visit(const AstExprCall& expr, CodegenContext& ctx) const override;
     llvm::Value *visit(const AstExprLetIn& expr, CodegenContext& ctx) const override;
     llvm::Value *visit(const AstExprMatch& expr, CodegenContext& ctx) const override;

@@ -15,6 +15,21 @@ std::unique_ptr<InterpreterValue> InterpreterValueBool::clone() const {
     return std::make_unique<InterpreterValueBool>(Value);
 }
 
+InterpreterValueArray::InterpreterValueArray(const std::vector<std::unique_ptr<InterpreterValue>> &Value) {
+    for (const auto& val_ptr : Value) {
+        this->Value.push_back(val_ptr->clone());
+    }
+}
+
+const std::vector<std::unique_ptr<InterpreterValue>>& InterpreterValueArray::getValue() const {
+    return this->Value;
+}
+
+std::unique_ptr<InterpreterValue> InterpreterValueArray::clone() const {
+    return std::make_unique<InterpreterValueArray>(this->Value);
+}
+
+
 InterpreterValue* Context::getValue(const std::string& name) const {
     auto it = variables.find(name);
     if (it != variables.end()) {
@@ -85,6 +100,17 @@ std::unique_ptr<InterpreterValue> Interpreter::visit(const AstExprConstLong& exp
 
 std::unique_ptr<InterpreterValue> Interpreter::visit(const AstExprConstBool& expr) const {
     return std::make_unique<InterpreterValueBool>(expr.getValue());
+}
+
+std::unique_ptr<InterpreterValue> Interpreter::visit(const AstExprConstArray& expr) const {
+    std::vector<std::unique_ptr<InterpreterValue>> evaluatedElements;
+
+    for (const auto& elementExpr : expr.getElements()) {
+        auto evaluated = this->eval(*elementExpr);
+        evaluatedElements.push_back(std::move(evaluated));
+    }
+
+    return std::make_unique<InterpreterValueArray>(evaluatedElements);
 }
 
 std::unique_ptr<InterpreterValue> Interpreter::visit(const AstExprVariable& expr) const {

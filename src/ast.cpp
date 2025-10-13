@@ -20,6 +20,20 @@ std::unique_ptr<Type> Bool::clone() const {
 }
 
 
+Array::Array(std::unique_ptr<Type> elementType) 
+    : ElementType(std::move(elementType)) {}
+const Type* Array::getElementType() const {
+    return ElementType.get();
+}
+std::unique_ptr<AstExpr> Array::defaultValue() const {
+    std::vector<std::unique_ptr<AstExpr>> emptyElements;
+    return std::make_unique<AstExprConstArray>(SourceLocation {0, 0}, ElementType->clone(), std::move(emptyElements));
+}
+std::unique_ptr<Type> Array::clone() const {
+    return std::make_unique<Array>(ElementType->clone());
+}
+
+
 AstExpr::AstExpr(const SourceLocation& loc) : Location(loc) {}
 const SourceLocation& AstExpr::getLocation() const { return Location; }
 
@@ -47,6 +61,30 @@ std::unique_ptr<InterpreterValue> AstExprConstBool::accept(const AstValueVisitor
     return visitor.visit(*this);
 }
 llvm::Value *AstExprConstBool::accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const {
+    return visitor.visit(*this, ctx);
+}
+
+AstExprConstArray::AstExprConstArray(const SourceLocation &loc, 
+                                     std::unique_ptr<Type> ElementType, 
+                                     std::vector<std::unique_ptr<AstExpr>> Elements)
+    : AstExprConst(loc), ElementType(std::move(ElementType)), Elements(std::move(Elements)) {}
+const Type* AstExprConstArray::getElementType() const { 
+    return ElementType.get(); 
+}
+const std::vector<std::unique_ptr<AstExpr>>& AstExprConstArray::getElements() const {
+    return Elements;
+}
+std::unique_ptr<AstExpr> AstExprConstArray::clone() const {
+    std::vector<std::unique_ptr<AstExpr>> clonedElements;
+    for (const auto& elem : Elements) {
+        clonedElements.push_back(elem->clone());
+    }
+    return std::make_unique<AstExprConstArray>(Location, ElementType->clone(), std::move(clonedElements));
+}
+std::unique_ptr<InterpreterValue> AstExprConstArray::accept(const AstValueVisitor& visitor) const {
+    return visitor.visit(*this);
+}
+llvm::Value *AstExprConstArray::accept(const AstLLVMValueVisitor& visitor, CodegenContext& ctx) const {
     return visitor.visit(*this, ctx);
 }
 

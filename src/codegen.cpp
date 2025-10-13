@@ -149,6 +149,13 @@ llvm::Value *CodeGenerator::visit(const AstExprConstBool& expr, CodegenContext& 
     return llvm::ConstantInt::get(Int1Ty, expr.getValue()); 
 }
 
+llvm::Value *CodeGenerator::visit(const AstExprConstArray& expr, CodegenContext& ctx) const {
+    assert(false && "not implemented");
+    (void) ctx;
+    llvm::Type* Int1Ty = llvm::Type::getInt1Ty(*TheContext); 
+    return llvm::ConstantInt::get(Int1Ty, false); 
+}
+
 
 llvm::Value *CodeGenerator::visit(const AstExprVariable& expr, CodegenContext& ctx) const {
     auto it = ctx.NamedValues.find(expr.getName());

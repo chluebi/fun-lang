@@ -182,7 +182,7 @@ class AstExprConstArray : public AstExprConst {
     std::unique_ptr<Type> ElementType;
     std::vector<std::unique_ptr<AstExpr>> Elements;
 public:
-    AstExprConstArray(const SourceLocation &loc, std::vector<std::unique_ptr<AstExpr>> Elements);
+    AstExprConstArray(const SourceLocation &loc, std::unique_ptr<Type> ElementType, std::vector<std::unique_ptr<AstExpr>> Elements);
     const Type* getElementType() const;
     const std::vector<std::unique_ptr<AstExpr>>& getElements() const;
     std::unique_ptr<AstExpr> clone() const override;

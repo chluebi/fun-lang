@@ -37,7 +37,7 @@ class InterpreterValueArray : public InterpreterValue {
     std::vector<std::unique_ptr<InterpreterValue>> Value;
 public:
     InterpreterValueArray(const std::vector<std::unique_ptr<InterpreterValue>> &Value);
-    std::vector<std::unique_ptr<InterpreterValue>>& getValue() const;
+    const std::vector<std::unique_ptr<InterpreterValue>>& getValue() const;
     std::unique_ptr<InterpreterValue> clone() const override;
 };
 
