@@ -32,6 +32,16 @@ public:
     std::unique_ptr<InterpreterValue> clone() const override;
 };
 
+class InterpreterValueArray : public InterpreterValue {
+    std::unique_ptr<Type> ElementType;
+    std::vector<std::unique_ptr<InterpreterValue>> Value;
+public:
+    InterpreterValueArray(const std::vector<std::unique_ptr<InterpreterValue>> &Value);
+    std::vector<std::unique_ptr<InterpreterValue>>& getValue() const;
+    std::unique_ptr<InterpreterValue> clone() const override;
+};
+
+
 class Context {
 private:
     std::unordered_map<std::string, std::unique_ptr<InterpreterValue>> variables;
@@ -81,6 +91,7 @@ public:
 private:
     std::unique_ptr<InterpreterValue> visit(const AstExprConstLong& expr) const override;
     std::unique_ptr<InterpreterValue> visit(const AstExprConstBool& expr) const override;
+    std::unique_ptr<InterpreterValue> visit(const AstExprConstArray& expr) const override;
     std::unique_ptr<InterpreterValue> visit(const AstExprVariable& expr) const override;
     std::unique_ptr<InterpreterValue> visit(const AstExprCall& expr) const override;
     std::unique_ptr<InterpreterValue> visit(const AstExprLetIn& expr) const override;
